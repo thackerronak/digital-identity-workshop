@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACME Store & Digital Identity Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <svg class="brand-logo" viewBox="0 0 24 24" width="28" height="28">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span class="brand-name">Google Ecosystem Portal</span>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs" role="tablist">
+        <button class="nav-tab active" data-tab="cart">
+          <span class="tab-icon">🛒</span> Store Cart
+        </button>
+        <button class="nav-tab" data-tab="building">
+          <span class="tab-icon">🏢</span> Building Access
+        </button>
+        <button class="nav-tab" data-tab="it">
+          <span class="tab-icon">💻</span> IT & Cloud Portal
+        </button>
+        <button class="nav-tab" data-tab="perks">
+          <span class="tab-icon">🎁</span> Benefits & Perks
+        </button>
+      </nav>
+
+      <div class="wallet-status-chip">
+        <span class="status-dot online"></span>
+        <span>Digital Wallet Ready</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="main-container">
+
+    <!-- ──────────────── TAB 1: STORE CART ──────────────── -->
+    <section id="tab-cart" class="tab-panel active">
+      <div class="panel-header">
+        <div>
+          <h2>Shopping Cart</h2>
+          <p class="subtitle">Review your selected electronics, apparel, and footwear.</p>
+        </div>
+        <div class="cart-items-count"><span id="total-items-badge">4</span> Items</div>
+      </div>
+
+      <div class="cart-layout">
+        <!-- Products Column -->
+        <div class="cart-items-column">
+          <div class="items-list" id="cart-items-container">
+            <!-- Rendered by app.js -->
+          </div>
+        </div>
+
+        <!-- Order Summary Sidebar -->
+        <aside class="order-summary-sidebar">
+          <div class="summary-card">
+            <h3>Order Summary</h3>
+
+            <div class="summary-breakdown">
+              <div class="summary-row">
+                <span>Subtotal</span>
+                <span id="summary-subtotal">$0.00</span>
+              </div>
+              <div class="summary-row">
+                <span>Estimated Tax (8%)</span>
+                <span id="summary-tax">$0.00</span>
+              </div>
+              <div class="summary-row">
+                <span>Shipping & Handling</span>
+                <span class="free-shipping">FREE</span>
+              </div>
+
+              <!-- Employee Discount Row -->
+              <div class="summary-row discount-row hidden" id="discount-breakdown-row">
+                <span class="discount-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  Employee Discount (20%)
+                </span>
+                <span class="discount-amount" id="summary-discount">-$0.00</span>
+              </div>
+
+              <div class="summary-divider"></div>
+
+              <div class="summary-row total-row">
+                <span>Total Due</span>
+                <span id="summary-total">$0.00</span>
+              </div>
+            </div>
+
+            <!-- Employee Badge Offer / Verification Card -->
+            <div class="employee-badge-box" id="badge-box">
+              <div class="badge-box-header">
+                <div class="badge-icon-wrap">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg" alt="Google Logo" height="16">
+                </div>
+                <h4>Google Employee Discount</h4>
+              </div>
+              <p class="badge-box-desc">
+                Present your verified <strong>Google Employee Badge</strong> to unlock an instant <strong>20% discount</strong> on this order.
+              </p>
+
+              <!-- Unverified State CTA -->
+              <div id="badge-unverified-state" class="badge-cta-container">
+                <button class="btn-verify" id="btn-apply-discount">
+                  <span class="btn-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                      <line x1="7" y1="8" x2="17" y2="8"></line>
+                      <line x1="7" y1="12" x2="13" y2="12"></line>
+                      <line x1="7" y1="16" x2="11" y2="16"></line>
+                    </svg>
+                  </span>
+                  Apply with Web Wallet
+                </button>
+                <button class="btn-verify btn-verify-qr" id="btn-show-qr">
+                  <span class="btn-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                  </span>
+                  Scan QR with Mobile
+                </button>
+              </div>
+
+              <!-- Verified State Display (populated dynamically from Verifiable Presentation claims) -->
+              <div id="badge-verified-state" class="hidden"></div>
+            </div>
+
+            <button class="btn-checkout" id="btn-checkout">Proceed to Checkout</button>
+            <p class="checkout-guarantee">🔒 Verified with Employee Digital Identity</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ──────────────── TAB 2: BUILDING ACCESS (FUTURE USE CASE) ──────────────── -->
+    <section id="tab-building" class="tab-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Corporate Building & Turnstile Access</h2>
+          <p class="subtitle">Future use case: Tap your employee badge to open security turnstiles.</p>
+        </div>
+      </div>
+      <div class="future-case-card">
+        <div class="case-icon">🏢</div>
+        <h3>HQ Turnstile Reader Simulation</h3>
+        <p>Using digital credential verification, the corporate security turnstile requests only <code>employee_id</code> and <code>department</code> to permit access to ACME Mountain View Building 43.</p>
+        <button class="btn-secondary" onclick="simulateUseCase('building_access')">Test Building Turnstile Flow</button>
+        <div id="building-result" class="test-result-box hidden"></div>
+      </div>
+    </section>
+
+    <!-- ──────────────── TAB 3: IT ACCESS (FUTURE USE CASE) ──────────────── -->
+    <section id="tab-it" class="tab-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Corporate IT & Infrastructure Portal</h2>
+          <p class="subtitle">Future use case: Zero-trust login to internal tools and Google Cloud environments.</p>
+        </div>
+      </div>
+      <div class="future-case-card">
+        <div class="case-icon">💻</div>
+        <h3>Zero-Trust Cloud Console Access</h3>
+        <p>Request corporate email and engineering role credentials to grant access to production Kubernetes clusters.</p>
+        <button class="btn-secondary" onclick="simulateUseCase('it_access')">Test IT Authorization Flow</button>
+        <div id="it-result" class="test-result-box hidden"></div>
+      </div>
+    </section>
+
+    <!-- ──────────────── TAB 4: PERKS & BENEFITS (FUTURE USE CASE) ──────────────── -->
+    <section id="tab-perks" class="tab-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Employee Perks & Wellness Subsidies</h2>
+          <p class="subtitle">Future use case: Gym memberships, commuter benefits, and annual stipends.</p>
+        </div>
+      </div>
+      <div class="future-case-card">
+        <div class="case-icon">🎁</div>
+        <h3>Corporate Wellness & Gym Subsidy</h3>
+        <p>Redeem monthly fitness and commuter stipends by proving active employment status with your verifiable credential.</p>
+        <button class="btn-secondary" onclick="simulateUseCase('benefits')">Test Benefits Claim Flow</button>
+        <div id="perks-result" class="test-result-box hidden"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Checkout Success Modal -->
+  <div class="modal-backdrop hidden" id="checkout-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-icon">🎉</div>
+        <h3>Order Placed Successfully!</h3>
+      </div>
+      <div class="modal-body">
+        <p>Thank you for your order. Your Google Employee discount was validated and applied successfully.</p>
+        <div class="receipt-summary" id="receipt-summary">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" onclick="closeCheckoutModal()">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Code Modal for Mobile Wallet Scanning -->
+  <div class="modal-backdrop hidden" id="qr-modal">
+    <div class="modal-content qr-modal-card">
+      <div class="modal-header">
+        <div class="modal-icon">📱</div>
+        <div class="modal-title-wrap">
+          <h3>Scan with Mobile Wallet</h3>
+          <p class="modal-subtitle">Open your digital wallet or camera app on your phone</p>
+        </div>
+        <button class="modal-close-btn" id="btn-close-qr" onclick="closeQrModal()">&times;</button>
+      </div>
+      <div class="modal-body qr-modal-body">
+        <div class="qr-code-wrapper">
+          <div id="qrcode-container"></div>
+          <div id="qr-loading-spinner" class="qr-loading hidden">
+            <div class="spinner"></div>
+            <span>Generating QR Code...</span>
+          </div>
+        </div>
+        <div class="qr-instructions">
+          <p>Scan this QR code using your <strong>Digital Wallet scanner</strong> to present your Google Employee Badge.</p>
+        </div>
+        <div class="qr-polling-status">
+          <span class="polling-pulse"></span>
+          <span id="qr-status-text">Waiting for wallet presentation...</span>
+        </div>
+      </div>
+      <div class="modal-footer qr-modal-footer">
+        <button class="btn-secondary" onclick="closeQrModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/qrcode.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

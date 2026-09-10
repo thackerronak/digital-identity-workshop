@@ -1,0 +1,213 @@
+name: workshop
+
+# Digital identity workshop: Keycloak issues an SD-JWT VC employee badge over
+# OID4VCI; wwWallet (a browser wallet) holds it; a Next.js portal will verify it
+# over OID4VP.
+#
+# No reverse proxy and no protocol shim are needed:
+#   * wwWallet performs its OID4VCI HTTP calls through its OWN backend
+#     (`POST /proxy`), so nothing cross-origin ever reaches Keycloak and its
+#     missing CORS on /protocol/oid4vc/* does not matter.
+#   * Keycloak 26.6 accepts `credential_configuration_id` in the credential
+#     request, which is what wwWallet sends -- PROVIDED the credential scope
+#     does NOT set `vc.credential_identifier`. With that attribute set, the
+#     access token carries credential_identifiers in authorization_details and
+#     Keycloak then insists the request select by credential_identifier, which
+#     wwWallet never sends.
+#     DO NOT upgrade to 26.7: it always generates an identifier (e.g.
+#     employee-badge_0000) and always requires it, so no browser wallet that
+#     selects by configuration id can complete issuance.
+
+services:
+  # ── Issuer ────────────────────────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION:-26.6.0}
+    command:
+      - start-dev
+      - --import-realm
+      - --features=oid4vc-vci,oid4vc-vci-preauth-code
+      # The issuer page is a custom welcome theme served at /.
+      - --spi-theme--welcome-theme=workshop
+      # Editing the theme should not need a container restart.
+      - --spi-theme--cache-themes=false
+      - --spi-theme--cache-templates=false
+      - --spi-theme--static-max-age=-1
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
+      # ONE hostname for browser and containers alike:
+      #   browser   -> *.localhost resolves to 127.0.0.1 (RFC 6761) -> published port
+      #   container -> the network alias below
+      # This is what lets an offer minted in the browser be fetched by the
+      # wallet's backend, with no /etc/hosts edits and no URL rewriting.
+      KC_HOSTNAME: ${KC_PUBLIC_URL:-http://keycloak.localhost:8080}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    networks:
+      default:
+        aliases:
+          - keycloak.localhost
+    volumes:
+      - ./keycloak-realm.json:/opt/keycloak/data/import/workshop-realm.json:ro
+      - ./keycloak-theme:/opt/keycloak/themes/workshop:ro
+      # Keycloak sandboxes keystores to <data-dir>/<realm-name>; anywhere else
+      # is rejected with "not under the realm directory".
+      - ./keycloak-keys:/opt/keycloak/data/workshop:ro
+      # No volume for the H2 database on purpose: every `up` re-imports the
+      # realm, so the demo always starts from an identical known state, and we
+      # avoid the root-owned-volume permission clash (uid 1000) on Linux/macOS.
+      # Trade-off: a restart drops sessions, so use the logout link if a stale
+      # SSO cookie ever yields "User session not found".
+    healthcheck:
+      # The Keycloak image ships no curl; use bash's /dev/tcp on the
+      # management port.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  # ── One-shot configuration that realm import cannot express ───────────────
+  bootstrap:
+    image: node:20-alpine
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      KC_URL: http://keycloak:8080
+      KC_REALM: ${KC_REALM:-workshop}
+      KC_ADMIN: ${KC_ADMIN:-admin}
+      KC_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
+      CREDENTIAL_SCOPE: employee-badge
+      DEMO_USERS: ronak,raj,milan
+    volumes:
+      - ./bootstrap.js:/bootstrap.js:ro
+      - ./keycloak-credential-scopes.json:/credential-scopes.json:ro
+    command: ["node", "/bootstrap.js"]
+    restart: "no"
+
+  # ── Holder: wwWallet (browser wallet, BSD-2-Clause) ───────────────────────
+  wallet-db:
+    image: mariadb:12
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: wallet
+      MARIADB_USER: wallet
+      MARIADB_PASSWORD: wallet
+    volumes:
+      # Persist wallet accounts. Without this, any `docker compose down` wipes
+      # the registered passkeys server-side while they survive in the OS
+      # keychain, and the next sign-in fails with
+      #   "Unknown passkey, possibly deleted by user."
+      # After a deliberate `down -v`, also delete the stale passkey from the
+      # browser/OS passkey manager (or just sign up again).
+      - wallet-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mariadb", "-uwallet", "-pwallet", "--protocol=TCP", "-hlocalhost", "-estatus"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  wallet-backend:
+    build:
+      context: https://github.com/wwWallet/wallet-backend-server.git#master
+    depends_on:
+      wallet-db:
+        condition: service_healthy
+    environment:
+      APP_URL: http://localhost:8002
+      PORT: 8002
+      APP_SECRET: workshop-demo-secret-not-for-production-0
+      SSL_FLAG: "false"
+      DB_HOST: wallet-db
+      DB_PORT: 3306
+      DB_USER: wallet
+      DB_PASSWORD: wallet
+      DB_NAME: wallet
+      WALLET_CLIENT_URL: http://localhost:3001/
+      WEBAUTHN_ORIGIN: http://localhost:3001
+      WEBAUTHN_RP_ID: localhost
+      WEBAUTHN_RP_NAME: Your Wallet
+    # The image ships synchronize:false and does not run its migrations, so a
+    # fresh database has no schema and every WebAuthn call 500s with
+    #   Table 'wallet.webauthn_challenge' doesn't exist
+    # Run migrations first (idempotent), then start. The typeorm binary is not
+    # on PATH in that image, so call its CLI directly.
+    command:
+      - sh
+      - -c
+      - >-
+        node /app/node_modules/typeorm/cli.js migration:run -d dist/src/AppDataSource.js &&
+        node ./dist/src/app.js
+    ports:
+      - "8002:8002"
+
+  # Seeds wwWallet's trusted-issuer registry (no API exists for it). Runs after
+  # the backend has created the schema via its migrations.
+  wallet-seed:
+    image: mariadb:12
+    depends_on:
+      wallet-db:
+        condition: service_healthy
+      wallet-backend:
+        condition: service_started
+    volumes:
+      - ./wwwallet/seed.sql:/seed.sql:ro
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        for i in $$(seq 1 30); do
+          if mariadb -hwallet-db -uwallet -pwallet -D wallet -e "select 1 from credential_issuer limit 1" >/dev/null 2>&1; then
+            mariadb -hwallet-db -uwallet -pwallet -D wallet < /seed.sql && echo "issuer registry seeded" && exit 0;
+          fi;
+          echo "waiting for wallet schema..."; sleep 2;
+        done;
+        echo "!! wallet schema never appeared"; exit 1
+    restart: "no"
+
+  wallet-frontend:
+    build:
+      context: https://github.com/wwWallet/wallet-frontend.git#master
+    # Config is applied at CONTAINER START, not build time: the image's
+    # /docker-entrypoint.d/wallet-config.sh runs config/_cli_.ts over the
+    # environment and injects the result into index.html.
+    env_file:
+      - ./wwwallet/frontend.env
+    depends_on:
+      - wallet-backend
+    ports:
+      - "3001:80"
+
+  # ── Verifier Portal (OID4VP Relying Party & Store Cart) ───────────────────
+  verifier:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      PORT: 4000
+      PUBLIC_URL: ${VERIFIER_PUBLIC_URL:-http://verifier.localhost:4000}
+      WALLET_URL: ${WALLET_URL:-http://localhost:3001}
+    ports:
+      - "4000:4000"
+    networks:
+      default:
+        aliases:
+          - verifier.localhost
+    volumes:
+      - ../server.js:/app/server.js:ro
+      - ../keys:/app/keys:ro
+      - ../public:/app/public:ro
+    depends_on:
+      - wallet-frontend
+
+volumes:
+  wallet-data:

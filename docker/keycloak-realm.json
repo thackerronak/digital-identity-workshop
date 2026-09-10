@@ -1,0 +1,254 @@
+{
+  "realm": "workshop",
+  "enabled": true,
+  "displayName": "Google Issuer \u2014 Workshop IdP",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "accountTheme": null,
+  "attributes": {
+    "credentialOfferLifespanS": "600",
+    "preAuthorizedCodeLifespanS": "600",
+    "vcNonceLifetimeS": "300"
+  },
+  "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "name": "workshop-issuer-es256",
+        "providerId": "java-keystore",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "200"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ],
+          "algorithm": [
+            "ES256"
+          ],
+          "keystore": [
+            "/opt/keycloak/data/workshop/issuer.p12"
+          ],
+          "keystorePassword": [
+            "workshop"
+          ],
+          "keystoreType": [
+            "PKCS12"
+          ],
+          "keyAlias": [
+            "workshop-issuer"
+          ],
+          "keyPassword": [
+            "workshop"
+          ],
+          "keyUse": [
+            "SIG"
+          ]
+        }
+      },
+      {
+        "name": "rsa-enc-generated",
+        "providerId": "rsa-enc-generated",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "100"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ],
+          "algorithm": [
+            "RSA-OAEP"
+          ]
+        }
+      },
+      {
+        "name": "rsa-generated",
+        "providerId": "rsa-generated",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "100"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ],
+          "algorithm": [
+            "RS256"
+          ]
+        }
+      },
+      {
+        "name": "hmac-generated",
+        "providerId": "hmac-generated",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "100"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ],
+          "algorithm": [
+            "HS512"
+          ]
+        }
+      },
+      {
+        "name": "aes-generated",
+        "providerId": "aes-generated",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "100"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ]
+        }
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "workshop-badge",
+      "name": "Employee Badge Issuer Page",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://keycloak.localhost:8080/*",
+        "http://localhost:8080/*",
+        "http://portal.localhost:3000/*",
+        "http://localhost:3000/*",
+        "http://localhost:3001/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "oid4vci.enabled": "true",
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "ronak",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Ronak",
+      "lastName": "Patel",
+      "email": "ronak@acme.test",
+      "attributes": {
+        "employee_id": [
+          "ACME-0417"
+        ],
+        "department": [
+          "Platform Engineering"
+        ],
+        "age_over_18": [
+          "true"
+        ],
+        "picture": [
+          "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=face&q=80"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "workshop",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-workshop"
+      ]
+    },
+    {
+      "username": "raj",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Raj",
+      "lastName": "Sharma",
+      "email": "raj@acme.test",
+      "attributes": {
+        "employee_id": [
+          "ACME-1182"
+        ],
+        "department": [
+          "Security"
+        ],
+        "age_over_18": [
+          "true"
+        ],
+        "picture": [
+          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face&q=80"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "workshop",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-workshop"
+      ]
+    },
+    {
+      "username": "milan",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Milan",
+      "lastName": "Mehta",
+      "email": "milan@acme.test",
+      "attributes": {
+        "employee_id": [
+          "ACME-2043"
+        ],
+        "department": [
+          "Finance"
+        ],
+        "age_over_18": [
+          "true"
+        ],
+        "picture": [
+          "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop&crop=face&q=80"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "workshop",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-workshop"
+      ]
+    }
+  ],
+  "verifiableCredentialsEnabled": true
+}
