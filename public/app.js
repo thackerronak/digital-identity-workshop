@@ -37,6 +37,7 @@ const INITIAL_PRODUCTS = [
 let cartItems = [];
 let isEmployeeVerified = false;
 let verifiedClaims = null;
+let verificationError = null;
 
 // ──────────────── INITIALIZATION ────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -92,24 +93,36 @@ async function checkUrlParamsForVerification() {
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get('session_id');
   const verified = params.get('verified');
+  const errorMsg = params.get('error');
   let activeTab = params.get('tab') || 'cart';
   if (activeTab === 'cart_discount') activeTab = 'cart';
 
   switchTab(activeTab);
 
-  if (sessionId && verified === 'true') {
-    try {
-      const res = await fetch(`/api/oid4vp/status/${sessionId}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'verified') {
-          isEmployeeVerified = true;
-          verifiedClaims = data.claims;
-          activeTab = 'cart';
+  if (sessionId) {
+    if (verified === 'false' || errorMsg) {
+      isEmployeeVerified = false;
+      verifiedClaims = null;
+      verificationError = errorMsg || 'Presentation cryptographically rejected';
+    } else if (verified === 'true') {
+      try {
+        const res = await fetch(`/api/oid4vp/status/${sessionId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'verified') {
+            isEmployeeVerified = true;
+            verifiedClaims = data.claims;
+            verificationError = null;
+            activeTab = 'cart';
+          } else if (data.status === 'failed') {
+            isEmployeeVerified = false;
+            verifiedClaims = null;
+            verificationError = data.error || 'Verification failed';
+          }
         }
+      } catch (err) {
+        console.warn('Failed to fetch session claims:', err);
       }
-    } catch (err) {
-      console.warn('Failed to fetch session claims:', err);
     }
 
     // Clean up URL without reload
@@ -212,6 +225,26 @@ function renderCart() {
     unverifiedState.classList.remove('hidden');
     verifiedState.classList.add('hidden');
     verifiedState.innerHTML = '';
+  }
+
+  // Verification Error Notice
+  const errorBox = document.getElementById('verification-error-notice');
+  if (errorBox) {
+    if (verificationError && !isEmployeeVerified) {
+      errorBox.classList.remove('hidden');
+      errorBox.innerHTML = `
+        <div class="verification-error-card">
+          <div class="error-badge-icon">⚠️</div>
+          <div class="error-badge-info">
+            <div class="error-badge-title">Presentation Cryptographically Rejected</div>
+            <div class="error-badge-desc">${escapeHtml(verificationError)}</div>
+          </div>
+        </div>
+      `;
+    } else {
+      errorBox.classList.add('hidden');
+      errorBox.innerHTML = '';
+    }
   }
 
   saveCartState();
@@ -379,11 +412,29 @@ function startQrPolling(sessionId) {
 
         isEmployeeVerified = true;
         verifiedClaims = data.claims;
+        verificationError = null;
 
         setTimeout(() => {
           closeQrModal();
           renderCart();
         }, 800);
+      } else if (data.status === 'failed') {
+        clearInterval(qrPollingInterval);
+        qrPollingInterval = null;
+
+        const statusText = document.getElementById('qr-status-text');
+        if (statusText) {
+          statusText.innerHTML = `❌ <strong>Verification Failed:</strong> ${escapeHtml(data.error || 'Cryptographic rejection')}`;
+        }
+
+        isEmployeeVerified = false;
+        verifiedClaims = null;
+        verificationError = data.error || 'Cryptographic verification failed';
+
+        setTimeout(() => {
+          closeQrModal();
+          renderCart();
+        }, 2000);
       }
     } catch (e) {
       console.warn('[Store] Polling error:', e);

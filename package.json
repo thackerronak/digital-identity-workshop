@@ -4,7 +4,8 @@
   "description": "Employee Badge Verification Portal with OID4VP Store Cart",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test-verification.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

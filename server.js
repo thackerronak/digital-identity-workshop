@@ -41,9 +41,32 @@ let privateKey = null;
   }
 })();
 
+// Configuration & Trusted Authorities
+const KEYCLOAK_INTERNAL_URL = process.env.KEYCLOAK_INTERNAL_URL || 'http://keycloak.localhost:8080';
+const TRUSTED_ISSUERS = (process.env.TRUSTED_ISSUERS || 'http://keycloak.localhost:8080/realms/workshop,http://localhost:8080/realms/workshop')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+const REQUIRE_KEY_BINDING = process.env.REQUIRE_KEY_BINDING !== 'false';
+
 // In-memory session tracking
 const sessions = new Map();
 const stateToSessionId = new Map();
+
+// Remote JWKS Cache
+const jwksCache = new Map();
+function getJwksForIssuer(iss) {
+  if (!TRUSTED_ISSUERS.includes(iss)) {
+    throw new Error(`Untrusted issuer: "${iss}". Allowed trusted issuers: ${TRUSTED_ISSUERS.join(', ')}`);
+  }
+  if (!jwksCache.has(iss)) {
+    // Map localhost to internal docker network alias if running in container
+    const fetchUrl = iss.replace('http://localhost:8080', KEYCLOAK_INTERNAL_URL) + '/protocol/openid-connect/certs';
+    console.log(`[Verifier] Initializing JWKS for issuer "${iss}" via ${fetchUrl}`);
+    jwksCache.set(iss, jose.createRemoteJWKSet(new URL(fetchUrl)));
+  }
+  return jwksCache.get(iss);
+}
 
 // Helper to decode Base64Url
 function base64UrlDecode(str) {
@@ -54,39 +77,166 @@ function base64UrlDecode(str) {
   return Buffer.from(base64, 'base64').toString('utf8');
 }
 
-// Parse SD-JWT disclosures
-function parseSdJwt(sdJwtString) {
-  const parts = sdJwtString.split('~');
-  const issuerJwt = parts[0];
-  const disclosures = parts.slice(1);
-
-  // Parse Issuer payload
-  let issuerPayload = {};
-  try {
-    const payloadSegment = issuerJwt.split('.')[1];
-    issuerPayload = JSON.parse(base64UrlDecode(payloadSegment));
-  } catch (e) {
-    console.warn('[Verifier] Could not parse issuer JWT payload:', e.message);
+/**
+ * Spec-compliant SD-JWT VC Presentation Verification Engine:
+ * 1. Unpacks SD-JWT presentation: Issuer-JWT ~ Disclosures ~ [KB-JWT]
+ * 2. Validates Issuer JWT signature against Keycloak JWKS and checks trusted issuer & vct
+ * 3. Recomputes SHA-256 digests of all presented disclosures against payload._sd
+ * 4. Verifies Holder Key-Binding JWT (KB-JWT) against cnf.jwk, validating nonce, aud, and sd_hash
+ */
+async function verifySdJwtPresentation(rawVp, session) {
+  if (!rawVp || typeof rawVp !== 'string') {
+    throw new Error('Missing or invalid vp_token format');
   }
 
-  const claims = {};
-  for (const disc of disclosures) {
-    if (!disc) continue;
+  const parts = rawVp.split('~');
+  if (parts.length < 2) {
+    throw new Error('Invalid SD-JWT structure: expected at least issuer JWT and disclosure separator');
+  }
+
+  const issuerJwt = parts[0];
+  const lastPart = parts[parts.length - 1];
+
+  let kbJwt = null;
+  let rawDisclosures = [];
+  let sdJwtWithoutKb = '';
+
+  // A trailing item with 3 dot-separated parts is the Key-Binding JWT
+  if (lastPart && lastPart.split('.').length === 3) {
+    kbJwt = lastPart;
+    rawDisclosures = parts.slice(1, parts.length - 1);
+    sdJwtWithoutKb = parts.slice(0, parts.length - 1).join('~') + '~';
+  } else {
+    rawDisclosures = parts.slice(1);
+    sdJwtWithoutKb = parts.join('~');
+    if (!sdJwtWithoutKb.endsWith('~')) {
+      sdJwtWithoutKb += '~';
+    }
+  }
+
+  // Filter empty disclosures (e.g. trailing ~)
+  rawDisclosures = rawDisclosures.filter(d => d && d.trim().length > 0);
+
+  // 1. Decode unverified header/payload to identify the issuer
+  let unverifiedPayload;
+  let unverifiedHeader;
+  try {
+    unverifiedHeader = jose.decodeProtectedHeader(issuerJwt);
+    unverifiedPayload = jose.decodeJwt(issuerJwt);
+  } catch (err) {
+    throw new Error(`Malformed Issuer JWT: ${err.message}`);
+  }
+
+  const iss = unverifiedPayload.iss;
+  if (!iss) {
+    throw new Error('Issuer JWT missing "iss" claim');
+  }
+
+  // 2. Resolve JWKS and cryptographically verify Issuer JWT
+  const jwks = getJwksForIssuer(iss);
+  let verified;
+  try {
+    verified = await jose.jwtVerify(issuerJwt, jwks, {
+      issuer: iss,
+      algorithms: ['ES256', 'RS256']
+    });
+  } catch (err) {
+    throw new Error(`Issuer signature verification failed: ${err.message}`);
+  }
+
+  const issuerPayload = verified.payload;
+
+  // 3. Verify Verifiable Credential Type (vct)
+  const EXPECTED_VCT = 'https://workshop.acme.test/employee-badge';
+  if (issuerPayload.vct && issuerPayload.vct !== EXPECTED_VCT) {
+    throw new Error(`Unexpected verifiable credential type (vct): "${issuerPayload.vct}", expected "${EXPECTED_VCT}"`);
+  }
+
+  // 4. Verify Disclosures against _sd digests
+  const sdAlg = (issuerPayload._sd_alg || 'sha-256').toLowerCase();
+  if (sdAlg !== 'sha-256') {
+    throw new Error(`Unsupported _sd_alg: ${sdAlg}`);
+  }
+
+  const validDigests = new Set(Array.isArray(issuerPayload._sd) ? issuerPayload._sd : []);
+  const disclosedClaims = {};
+
+  for (const disc of rawDisclosures) {
+    // Recompute digest: base64url(sha256(raw_disclosure_string))
+    const digest = crypto.createHash('sha256').update(disc).digest('base64url');
+    if (!validDigests.has(digest)) {
+      throw new Error(`Tampered or unlinked disclosure detected (digest mismatch: ${digest})`);
+    }
+
     try {
       const decoded = JSON.parse(base64UrlDecode(disc));
       if (Array.isArray(decoded) && decoded.length >= 3) {
         const claimName = decoded[1];
         const claimValue = decoded[2];
-        claims[claimName] = claimValue;
+        disclosedClaims[claimName] = claimValue;
       }
-    } catch (e) {
-      // Might be key binding JWT at the very end
+    } catch (err) {
+      throw new Error(`Malformed disclosure JSON: ${err.message}`);
     }
+  }
+
+  // 5. Key-Binding JWT Verification
+  let keyBindingVerified = false;
+  if (kbJwt) {
+    if (!issuerPayload.cnf || !issuerPayload.cnf.jwk) {
+      throw new Error('Presentation includes Key-Binding JWT, but credential has no cnf.jwk');
+    }
+
+    let holderKey;
+    try {
+      holderKey = await jose.importJWK(issuerPayload.cnf.jwk, 'ES256');
+    } catch (err) {
+      throw new Error(`Failed to import holder key from cnf.jwk: ${err.message}`);
+    }
+
+    let kbResult;
+    try {
+      kbResult = await jose.jwtVerify(kbJwt, holderKey, {
+        algorithms: ['ES256']
+      });
+    } catch (err) {
+      throw new Error(`Key-Binding JWT signature verification failed: ${err.message}`);
+    }
+
+    if (kbResult.protectedHeader.typ !== 'kb+jwt') {
+      throw new Error(`Invalid Key-Binding JWT header typ: "${kbResult.protectedHeader.typ}", expected "kb+jwt"`);
+    }
+
+    // Strict nonce check against verifier session
+    if (kbResult.payload.nonce !== session.nonce) {
+      throw new Error(`Key-Binding JWT nonce mismatch (replay or expired session). Expected "${session.nonce}", got "${kbResult.payload.nonce}"`);
+    }
+
+    // Verify audience
+    const expectedAud = ['x509_san_dns:verifier.localhost', 'verifier.localhost', session.clientId || 'x509_san_dns:verifier.localhost'];
+    const kbAud = Array.isArray(kbResult.payload.aud) ? kbResult.payload.aud : [kbResult.payload.aud];
+    const audMatch = kbAud.some(a => expectedAud.includes(a));
+    if (!audMatch) {
+      throw new Error(`Key-Binding JWT audience mismatch: "${kbResult.payload.aud}"`);
+    }
+
+    // Verify sd_hash integrity if present
+    if (kbResult.payload.sd_hash) {
+      const expectedSdHash = crypto.createHash('sha256').update(sdJwtWithoutKb).digest('base64url');
+      if (kbResult.payload.sd_hash !== expectedSdHash) {
+        throw new Error('Key-Binding JWT sd_hash mismatch with presented SD-JWT');
+      }
+    }
+
+    keyBindingVerified = true;
+  } else if (REQUIRE_KEY_BINDING || (issuerPayload.cnf && issuerPayload.cnf.jwk)) {
+    throw new Error('Key-Binding JWT (kb+jwt) is required for key-bound credentials, but none was provided');
   }
 
   return {
     issuerPayload,
-    disclosedClaims: claims
+    disclosedClaims,
+    keyBindingVerified
   };
 }
 
@@ -149,7 +299,8 @@ app.post('/api/oid4vp/session', async (req, res) => {
         client_name: 'Google Store & Corporate Portal',
         vp_formats_supported: {
           'dc+sd-jwt': {
-            sd_jwt_alg_values: ['ES256']
+            sd_jwt_alg_values: ['ES256'],
+            kb_jwt_alg_values: ['ES256']
           }
         }
       },
@@ -173,7 +324,9 @@ app.post('/api/oid4vp/session', async (req, res) => {
       status: 'pending',
       requestJwt,
       createdAt: Date.now(),
-      claims: null
+      claims: null,
+      error: null,
+      keyBindingVerified: false
     };
 
     sessions.set(sessionId, sessionData);
@@ -206,23 +359,32 @@ app.get('/api/oid4vp/request/:sessionId', (req, res) => {
 });
 
 // 3. Direct Post receiver from wwWallet
-app.post('/api/oid4vp/response', (req, res) => {
+app.post('/api/oid4vp/response', async (req, res) => {
   try {
     const { vp_token, state, presentation_submission } = req.body;
     console.log('[Verifier] Received Direct Post response for state:', state);
 
     if (!state) {
-      return res.status(400).json({ error: 'Missing state parameter' });
+      return res.status(400).json({ error: 'invalid_request', error_description: 'Missing state parameter' });
     }
 
     const sessionId = stateToSessionId.get(state);
     if (!sessionId || !sessions.has(sessionId)) {
-      return res.status(404).json({ error: 'Unknown or expired session state' });
+      return res.status(404).json({ error: 'invalid_request', error_description: 'Unknown or expired session state' });
     }
 
     const session = sessions.get(sessionId);
 
-    // Extract SD-JWT VC
+    // Replay protection: single-use session
+    if (session.status === 'verified') {
+      console.warn('[Verifier] Replay detected! Session already verified:', sessionId);
+      return res.status(400).json({
+        error: 'invalid_request',
+        error_description: 'Session has already been verified (replay attack protection).'
+      });
+    }
+
+    // Extract SD-JWT VC from vp_token
     let rawVp = vp_token;
     if (typeof vp_token === 'string' && (vp_token.startsWith('{') || vp_token.startsWith('['))) {
       try {
@@ -235,9 +397,31 @@ app.post('/api/oid4vp/response', (req, res) => {
       } catch (e) {}
     }
 
-    // Parse claims
-    const { issuerPayload, disclosedClaims } = parseSdJwt(rawVp);
+    // Spec-compliant cryptographic verification
+    let verificationResult;
+    try {
+      verificationResult = await verifySdJwtPresentation(rawVp, session);
+    } catch (verifyErr) {
+      console.error(`[Verifier] Cryptographic verification FAILED for session ${sessionId}:`, verifyErr.message);
+      session.status = 'failed';
+      session.error = verifyErr.message;
+      session.failedAt = Date.now();
+
+      const origin = session.returnOrigin || PUBLIC_URL;
+      const tab = session.useCase === 'cart_discount' ? 'cart' : (session.useCase || 'cart');
+      const failRedirectUri = `${origin}/?session_id=${sessionId}&verified=false&error=${encodeURIComponent(verifyErr.message)}&tab=${tab}`;
+
+      return res.status(400).json({
+        error: 'invalid_presentation',
+        error_description: verifyErr.message,
+        redirect_uri: failRedirectUri
+      });
+    }
+
+    const { issuerPayload, disclosedClaims, keyBindingVerified } = verificationResult;
+    console.log('[Verifier] Cryptographic verification SUCCESSFUL for session:', sessionId);
     console.log('[Verifier] Disclosed claims:', disclosedClaims);
+    console.log('[Verifier] Holder Key Binding verified:', keyBindingVerified);
 
     session.status = 'verified';
     session.claims = {
@@ -245,6 +429,7 @@ app.post('/api/oid4vp/response', (req, res) => {
       iss: issuerPayload.iss,
       vct: issuerPayload.vct
     };
+    session.keyBindingVerified = keyBindingVerified;
     session.verifiedAt = Date.now();
 
     const origin = session.returnOrigin || PUBLIC_URL;
@@ -257,7 +442,7 @@ app.post('/api/oid4vp/response', (req, res) => {
     });
   } catch (err) {
     console.error('[Verifier] Error processing response:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'server_error', error_description: err.message });
   }
 });
 
@@ -273,6 +458,8 @@ app.get('/api/oid4vp/status/:sessionId', (req, res) => {
     status: session.status,
     useCase: session.useCase,
     claims: session.claims,
+    error: session.error || null,
+    keyBindingVerified: session.keyBindingVerified || false,
     verifiedAt: session.verifiedAt
   });
 });

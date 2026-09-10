@@ -63,7 +63,10 @@ flowchart TD
        - Verified state displays are generated 100% dynamically from disclosed claims in the Verifiable Presentation (`given_name`, `family_name`, `department`, `employee_id`, `email`).
        - State is in-memory per session; page refresh resets the cart for clean testing.
      - **Building Access, IT Portal, Benefits Tabs**: Extensible scenarios showcasing multi-use employee badge verification.
-     - **OID4VP Implementation**: Issues signed request objects (`typ: "oauth-authz-req+jwt"`, `x509_san_dns:verifier.localhost`), receives SD-JWT disclosures via `direct_post`, and returns `redirect_uri` to bring the user back to the cart.
+     - **OID4VP Implementation**:
+       - Issues signed request objects (`typ: "oauth-authz-req+jwt"`, `x509_san_dns:verifier.localhost`).
+       - **Cryptographic Verification Engine**: Verifies Issuer JWT signature using Keycloak's remote JWKS (`ES256`), validates `iss` whitelist and `vct`, recomputes SHA-256 digests of all presented disclosures against `_sd` hashes, verifies holder Key-Binding JWT (`kb+jwt`) against `cnf.jwk` (validating session `nonce`, `aud`, and `sd_hash`), and enforces single-use session replay protection.
+       - Rejects forged signatures, untrusted issuers, tampered disclosures, and session replays with HTTP 400 and surfaces clear error states in both API responses and the cart UI.
 4. **Bootstrap Runner (`docker/bootstrap.js`)**:
    - Runs on compose startup to ensure Keycloak client scopes (`employee-badge`, `employee-badge-jwt`) are registered and assigned to demo users.
 
@@ -115,6 +118,9 @@ docker compose -f docker/docker-compose.yml logs -f wallet-backend
 
 # Stop services
 docker compose -f docker/docker-compose.yml down
+
+# Run end-to-end cryptographic verification test suite
+npm test
 
 # Reset state completely (re-imports realm on next up)
 docker compose -f docker/docker-compose.yml down -v

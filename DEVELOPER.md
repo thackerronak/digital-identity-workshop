@@ -138,6 +138,20 @@ KC_URL=http://localhost:8080 CREDENTIAL_SCOPES_FILE=docker/keycloak-credential-s
 
 For the interactive browser demo walkthrough (collecting the badge and testing cart verification), see the **[Demo Walkthrough in README.md](README.md#step-by-step-demo-walkthrough)**.
 
+### Automated Cryptographic & Security Test Suite
+The repository includes an end-to-end security test suite verifying all cryptographic checks:
+- **Valid SD-JWT VC**: Direct issuance from Keycloak and verification with Holder Key Binding (KB-JWT).
+- **Replay Attack Protection**: Re-submitting a consumed session or nonce is rejected.
+- **Untrusted Issuer Rejection**: Forged credentials signed by untrusted issuers are blocked.
+- **Forged Issuer Signature**: Fake JWS signatures are rejected.
+- **Tampered Disclosures**: Claims altered by an attacker are rejected via SHA-256 disclosure digest mismatch.
+
+Run the test suite with:
+```bash
+npm test
+# or: node test-verification.js
+```
+
 ### Terminal Smoke Tests with cURL
 Verify that all services are answering API requests properly:
 

@@ -196,6 +196,7 @@ services:
       PORT: 4000
       PUBLIC_URL: ${VERIFIER_PUBLIC_URL:-http://verifier.localhost:4000}
       WALLET_URL: ${WALLET_URL:-http://localhost:3001}
+      REQUIRE_KEY_BINDING: ${REQUIRE_KEY_BINDING:-true}
     ports:
       - "4000:4000"
     networks:
