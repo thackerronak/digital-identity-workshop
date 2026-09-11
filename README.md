@@ -156,6 +156,8 @@ Pre-configured corporate employee accounts in the `workshop` realm:
 
 ---
 
-## Next Steps & Developer Guide
+## Next Steps, Participant Guide & Developer Guide
 
-For local live-reload development, container management commands, and troubleshooting, see the **[Developer Guide](DEVELOPER.md)**. For digital identity and verifiable credentials terminology, see the **[Glossary](GLOSSARY.md)**.
+- **Hands-on Exercise**: To create your own credential and verifier tab in any domain (Degree, Boarding Pass, Driver License, KYC), see the **[Participant Guide](PARTICIPANT_GUIDE.md)**.
+- **Developer Guide**: For local live-reload development, container management commands, and troubleshooting, see the **[Developer Guide](DEVELOPER.md)**.
+- **Glossary**: For digital identity and verifiable credentials terminology, see the **[Glossary](GLOSSARY.md)**.

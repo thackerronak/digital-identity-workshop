@@ -109,8 +109,9 @@ KC_URL=http://localhost:8080 CREDENTIAL_SCOPES_FILE=docker/keycloak-credential-s
 
 ## 5. Repository Structure
 
-```text
-.
+├── .agents/                          # Antigravity agent customizations
+│   └── skills/
+│       └── onboard-credential-flow/  # Skill for onboarding new credentials & verifier tabs
 ├── README.md                         # Project overview and end-to-end demo walkthrough
 ├── DEVELOPER.md                      # Developer onboarding and setup guide (this file)
 ├── AGENTS.md                         # Architecture guidelines for AI pair programmers
