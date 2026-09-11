@@ -55,20 +55,23 @@ flowchart TD
 3. **Verifier Portal (`server.js`, `public/`, `Dockerfile`)**:
    - URL: `http://localhost:4000` / `http://verifier.localhost:4000`
    - Features:
-     - **Store Cart Tab**: E-commerce cart (Pixel 9 Pro, Tech Hoodie, Running Shoes, Pixel Buds) that verifies the employee badge via OID4VP to deduct a **20% Employee Discount**.
-     - **Verification Modes**:
-       - **Web Wallet Flow**: Direct browser redirect to local wallet (`http://localhost:3001/?client_id=...&request_uri=...`).
-       - **QR Code Flow**: Generates an `openid4vp://?client_id=x509_san_dns:verifier.localhost&request_uri=...` QR code (rendered via offline `qrcode.min.js`). The mobile wallet camera scans the QR code, submits presentation via `direct_post`, and the cart's background poller (`/api/oid4vp/status/:sessionId`) detects verification and applies the discount dynamically.
-     - **Dynamic Disclosures**:
-       - Verified state displays are generated 100% dynamically from disclosed claims in the Verifiable Presentation (`given_name`, `family_name`, `department`, `employee_id`, `email`).
-       - State is in-memory per session; page refresh resets the cart for clean testing.
-     - **Building Access, IT Portal, Benefits Tabs**: Extensible scenarios showcasing multi-use employee badge verification.
-     - **OID4VP Implementation**:
-       - Issues signed request objects (`typ: "oauth-authz-req+jwt"`, `x509_san_dns:verifier.localhost`).
-       - **Cryptographic Verification Engine**: Verifies Issuer JWT signature using Keycloak's remote JWKS (`ES256`), validates `iss` whitelist and `vct`, recomputes SHA-256 digests of all presented disclosures against `_sd` hashes, verifies holder Key-Binding JWT (`kb+jwt`) against `cnf.jwk` (validating session `nonce`, `aud`, and `sd_hash`), and enforces single-use session replay protection.
-       - Rejects forged signatures, untrusted issuers, tampered disclosures, and session replays with HTTP 400 and surfaces clear error states in both API responses and the cart UI.
+      - **Store Cart Tab**: E-commerce cart (Pixel 9 Pro, Tech Hoodie, Running Shoes, Pixel Buds) that verifies the employee badge via OID4VP to deduct a **20% Employee Discount**.
+      - **Term Plan Buy Tab**: Corporate group term life insurance purchase portal that requests **two verifiable credentials** simultaneously via DCQL:
+        1. `employee_badge` (Google Employee Badge, `https://workshop.acme.test/employee-badge`)
+        2. `medical_certificate` (Lilavati Hospital Medical Certificate, `https://lilavati.example/medical-certificate`)
+        - Dynamically calculates term life insurance sum assured ($2,000,000 coverage for "Fit for Duty", $1,000,000 for standard), monthly subsidized premium ($25/mo with 60% corporate discount vs $65 standard), medical exam waiver certification, and policy purchase checkout.
+      - **Verification Modes**:
+        - **Web Wallet Flow**: Direct browser redirect to local wallet (`http://localhost:3001/?client_id=...&request_uri=...`).
+        - **QR Code Flow**: Generates an `openid4vp://?client_id=x509_san_dns:verifier.localhost&request_uri=...` QR code (rendered via offline `qrcode.min.js`). The mobile wallet camera scans the QR code, submits presentation via `direct_post`, and the background poller (`/api/oid4vp/status/:sessionId`) detects verification and updates the UI dynamically.
+      - **Dynamic Disclosures**:
+        - Verified state displays are generated 100% dynamically from disclosed claims in the Verifiable Presentation (`given_name`, `family_name`, `department`, `employee_id`, `email`, `fitness_status`, `blood_group`, `hospital_name`, `physician_name`).
+        - State is in-memory per session; page refresh resets the cart and term plan for clean testing.
+      - **OID4VP Implementation**:
+        - Issues signed request objects (`typ: "oauth-authz-req+jwt"`, `x509_san_dns:verifier.localhost`) supporting multi-credential DCQL queries.
+        - **Cryptographic Verification Engine**: Verifies Issuer JWT signatures using Keycloak's remote JWKS (`ES256`), validates `iss` whitelist and `vct`, recomputes SHA-256 digests of all presented disclosures against `_sd` hashes, verifies holder Key-Binding JWT (`kb+jwt`) against `cnf.jwk` (validating session `nonce`, `aud`, and `sd_hash`), and enforces single-use session replay protection.
+        - Rejects forged signatures, untrusted issuers, tampered disclosures, and session replays with HTTP 400 and surfaces clear error states in both API responses and the UI.
 4. **Bootstrap Runner (`docker/bootstrap.js`)**:
-   - Runs on compose startup to ensure Keycloak client scopes (`employee-badge`, `employee-badge-jwt`) are registered and assigned to demo users.
+   - Runs on compose startup to ensure Keycloak client scopes (`employee-badge`, `employee-badge-jwt`, `medical-certificate`) are registered, configures the Declarative User Profile, and assigns scopes and attributes to demo users.
 
 ---
 

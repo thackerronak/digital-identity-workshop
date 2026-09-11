@@ -3,29 +3,67 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Google Issuer — Employee Badge</title>
+  <title>Digital Identity Issuer — Credentials Portal</title>
   <link rel="stylesheet" href="welcome-content/issuer.css">
 </head>
 <body>
   <header>
-    <div class="brand">Google Issuer</div>
-    <div class="role">Issuer &middot; Keycloak</div>
+    <div class="brand">Digital Identity Issuer Portal</div>
+    <div class="role">Keycloak OID4VCI &middot; Multi-Credential Issuer</div>
   </header>
 
   <main>
-    <h1>Digital employee badge</h1>
+    <h1>Collect your Verifiable Credentials</h1>
     <p class="lede">
-      Sign in once with your corporate password to collect your badge.
-      After that you can log in to the company portal without one.
+      Sign in once with your credentials to issue official digital credentials into your digital wallet (wwWallet).
+      You can collect both your Google Employee Badge and Lilavati Hospital Medical Certificate from this page.
     </p>
 
     <section id="step-login" hidden>
-      <button id="login" class="primary">Sign in to collect my badge</button>
-      <p class="hint">Demo employees: <code>ronak</code>, <code>raj</code>, <code>milan</code> &mdash; password <code>workshop</code></p>
+      <div class="cred-cards">
+        <div class="cred-preview-card">
+          <div class="cred-preview-icon">🏢</div>
+          <div>
+            <div class="cred-preview-title">Google Employee Badge</div>
+            <div class="cred-preview-sub">Corporate ID &bull; SD-JWT VC (dc+sd-jwt)</div>
+          </div>
+        </div>
+        <div class="cred-preview-card">
+          <div class="cred-preview-icon">🏥</div>
+          <div>
+            <div class="cred-preview-title">Lilavati Hospital Medical Certificate</div>
+            <div class="cred-preview-sub">Health & Fitness &bull; SD-JWT VC (dc+sd-jwt)</div>
+          </div>
+        </div>
+      </div>
+
+      <button id="login" class="primary">Sign in to collect credentials</button>
+      <p class="hint">Demo accounts: <code>ronak</code>, <code>raj</code>, <code>milan</code> &mdash; password <code>workshop</code></p>
     </section>
 
     <section id="step-offer" hidden>
       <p class="who">Signed in as <strong id="who"></strong></p>
+
+      <!-- Credential Switcher Tabs -->
+      <div class="cred-switcher">
+        <button id="tab-employee-badge" class="cred-tab active">
+          <span class="cred-tab-icon">🏢</span>
+          <span class="cred-tab-name">Google Employee Badge</span>
+        </button>
+        <button id="tab-medical-certificate" class="cred-tab">
+          <span class="cred-tab-icon">🏥</span>
+          <span class="cred-tab-name">Lilavati Medical Certificate</span>
+        </button>
+      </div>
+
+      <!-- Active Credential Banner -->
+      <div class="cred-banner" id="cred-banner">
+        <div class="cred-banner-info">
+          <h3 id="cred-banner-title">Google Employee Badge</h3>
+          <p id="cred-banner-desc">Verified corporate identity credential for building access and discounts.</p>
+        </div>
+        <div class="cred-format-tag" id="cred-format-tag">dc+sd-jwt</div>
+      </div>
 
       <h2>1 &middot; Your credential offer</h2>
       <p class="hint">Copy this into your wallet, or scan the code.</p>
@@ -66,7 +104,7 @@
       </p>
       <pre id="offer-json"></pre>
 
-      <button id="again" class="secondary">Generate another offer</button>
+      <button id="again" class="secondary">Regenerate offer</button>
     </section>
 
     <section id="step-error" hidden>

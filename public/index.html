@@ -28,14 +28,8 @@
         <button class="nav-tab active" data-tab="cart">
           <span class="tab-icon">🛒</span> Store Cart
         </button>
-        <button class="nav-tab" data-tab="building">
-          <span class="tab-icon">🏢</span> Building Access
-        </button>
-        <button class="nav-tab" data-tab="it">
-          <span class="tab-icon">💻</span> IT & Cloud Portal
-        </button>
-        <button class="nav-tab" data-tab="perks">
-          <span class="tab-icon">🎁</span> Benefits & Perks
+        <button class="nav-tab" data-tab="term_plan">
+          <span class="tab-icon">🛡️</span> Term Plan Buy
         </button>
       </nav>
 
@@ -157,58 +151,155 @@
       </div>
     </section>
 
-    <!-- ──────────────── TAB 2: BUILDING ACCESS (FUTURE USE CASE) ──────────────── -->
-    <section id="tab-building" class="tab-panel">
+    <!-- ──────────────── TAB 2: TERM PLAN BUY ──────────────── -->
+    <section id="tab-term_plan" class="tab-panel">
       <div class="panel-header">
         <div>
-          <h2>Corporate Building & Turnstile Access</h2>
-          <p class="subtitle">Future use case: Tap your employee badge to open security turnstiles.</p>
+          <h2>Corporate Term Life Insurance</h2>
+          <p class="subtitle">Instant digital underwriting via dual Verifiable Credentials (Employee Badge + Hospital Medical Certificate).</p>
         </div>
+        <div class="term-badge-tag">Zero Medical Exam Required</div>
       </div>
-      <div class="future-case-card">
-        <div class="case-icon">🏢</div>
-        <h3>HQ Turnstile Reader Simulation</h3>
-        <p>Using digital credential verification, the corporate security turnstile requests only <code>employee_id</code> and <code>department</code> to permit access to ACME Mountain View Building 43.</p>
-        <button class="btn-secondary" onclick="simulateUseCase('building_access')">Test Building Turnstile Flow</button>
-        <div id="building-result" class="test-result-box hidden"></div>
-      </div>
-    </section>
 
-    <!-- ──────────────── TAB 3: IT ACCESS (FUTURE USE CASE) ──────────────── -->
-    <section id="tab-it" class="tab-panel">
-      <div class="panel-header">
-        <div>
-          <h2>Corporate IT & Infrastructure Portal</h2>
-          <p class="subtitle">Future use case: Zero-trust login to internal tools and Google Cloud environments.</p>
-        </div>
-      </div>
-      <div class="future-case-card">
-        <div class="case-icon">💻</div>
-        <h3>Zero-Trust Cloud Console Access</h3>
-        <p>Request corporate email and engineering role credentials to grant access to production Kubernetes clusters.</p>
-        <button class="btn-secondary" onclick="simulateUseCase('it_access')">Test IT Authorization Flow</button>
-        <div id="it-result" class="test-result-box hidden"></div>
-      </div>
-    </section>
+      <div class="term-plan-grid">
+        <!-- Left: Product & Underwriting Overview -->
+        <div class="term-info-col">
+          <div class="term-hero-card">
+            <div class="term-hero-badge">Google Employee Exclusive Benefit</div>
+            <h3>Pre-Approved Group Term Life Protection</h3>
+            <p class="term-hero-desc">
+              Secure comprehensive term life coverage for your family with automated zero-touch underwriting. By presenting your cryptographic <strong>Google Employee Badge</strong> and <strong>Lilavati Hospital Medical Certificate</strong>, our smart underwriting engine calculates instant coverage limits and applies corporate group subsidies up to <strong>60% off</strong> standard market premiums.
+            </p>
 
-    <!-- ──────────────── TAB 4: PERKS & BENEFITS (FUTURE USE CASE) ──────────────── -->
-    <section id="tab-perks" class="tab-panel">
-      <div class="panel-header">
-        <div>
-          <h2>Employee Perks & Wellness Subsidies</h2>
-          <p class="subtitle">Future use case: Gym memberships, commuter benefits, and annual stipends.</p>
+            <div class="dual-cred-requirements">
+              <div class="cred-req-item">
+                <div class="cred-req-icon">🪪</div>
+                <div class="cred-req-details">
+                  <div class="cred-req-title">1. Employee Badge (SD-JWT VC)</div>
+                  <div class="cred-req-desc">Proves active employment status, company department, and employee identity.</div>
+                  <div class="cred-req-claims">Discloses: <code>given_name</code>, <code>family_name</code>, <code>employee_id</code>, <code>department</code></div>
+                </div>
+              </div>
+              <div class="cred-req-item">
+                <div class="cred-req-icon">🏥</div>
+                <div class="cred-req-details">
+                  <div class="cred-req-title">2. Medical Certificate (SD-JWT VC)</div>
+                  <div class="cred-req-desc">Certified clinical health report issued directly by licensed healthcare provider.</div>
+                  <div class="cred-req-claims">Discloses: <code>fitness_status</code>, <code>blood_group</code>, <code>hospital_name</code>, <code>physician_name</code></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="underwriting-rules-card">
+              <h4>📋 Instant Underwriting Rules</h4>
+              <div class="rules-table-wrap">
+                <table class="rules-table">
+                  <thead>
+                    <tr>
+                      <th>Verified Health Status</th>
+                      <th>Coverage Tier</th>
+                      <th>Sum Assured</th>
+                      <th>Subsidy</th>
+                      <th>Monthly Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="highlight-row">
+                      <td><span class="status-pill status-pill-fit">Fit for Duty</span></td>
+                      <td>Platinum Preferred</td>
+                      <td><strong>$2,000,000</strong></td>
+                      <td>60% Group Subsidy</td>
+                      <td><span class="price-pill">$25.00/mo</span></td>
+                    </tr>
+                    <tr>
+                      <td><span class="status-pill status-pill-cond">Conditional / Other</span></td>
+                      <td>Standard Preferred</td>
+                      <td><strong>$1,000,000</strong></td>
+                      <td>33% Group Subsidy</td>
+                      <td><span class="price-pill">$50.00/mo</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="future-case-card">
-        <div class="case-icon">🎁</div>
-        <h3>Corporate Wellness & Gym Subsidy</h3>
-        <p>Redeem monthly fitness and commuter stipends by proving active employment status with your verifiable credential.</p>
-        <button class="btn-secondary" onclick="simulateUseCase('benefits')">Test Benefits Claim Flow</button>
-        <div id="perks-result" class="test-result-box hidden"></div>
+
+        <!-- Right: Verification & Underwriting Quote Card -->
+        <div class="term-action-col">
+          <div class="term-quote-card" id="term-quote-card">
+            <div class="term-card-header">
+              <div class="term-card-icon">🛡️</div>
+              <div>
+                <h3>Term Policy Quote & Underwriting</h3>
+                <p class="term-card-sub">Dual-Credential Presentation</p>
+              </div>
+            </div>
+
+            <!-- Unverified State: User needs to present both credentials -->
+            <div id="term-unverified-state" class="term-flow-state">
+              <div class="term-prompt-box">
+                <p>Present your <strong>Employee Badge</strong> and <strong>Medical Certificate</strong> together from your Digital Wallet to unlock your instant quote.</p>
+              </div>
+
+              <div class="term-cta-buttons">
+                <button class="btn-verify btn-term-verify" id="btn-term-apply-wallet">
+                  <span class="btn-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                      <line x1="7" y1="8" x2="17" y2="8"></line>
+                      <line x1="7" y1="12" x2="13" y2="12"></line>
+                      <line x1="7" y1="16" x2="11" y2="16"></line>
+                    </svg>
+                  </span>
+                  Present with Web Wallet
+                </button>
+                <button class="btn-verify btn-verify-qr" id="btn-term-show-qr">
+                  <span class="btn-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                  </span>
+                  Scan QR with Mobile Wallet
+                </button>
+              </div>
+            </div>
+
+            <!-- Verified State: Shows Underwritten Policy & Buy Button -->
+            <div id="term-verified-state" class="term-flow-state hidden">
+              <!-- Dynamically populated by renderTermPlan() -->
+            </div>
+
+            <!-- Error Notice -->
+            <div id="term-error-notice" class="hidden"></div>
+          </div>
+        </div>
       </div>
     </section>
 
   </main>
+
+  <!-- Term Plan Purchase Confirmation Modal -->
+  <div class="modal-backdrop hidden" id="term-buy-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-icon">📜</div>
+        <h3>Term Life Policy Bound!</h3>
+      </div>
+      <div class="modal-body">
+        <p>Congratulations! Your corporate group term life insurance policy is officially bound and active.</p>
+        <div class="receipt-summary" id="term-policy-summary">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" onclick="closeTermBuyModal()">View Active Policy</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Checkout Success Modal -->
   <div class="modal-backdrop hidden" id="checkout-modal">

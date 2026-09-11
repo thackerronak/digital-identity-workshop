@@ -172,6 +172,21 @@
         ],
         "picture": [
           "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=face&q=80"
+        ],
+        "medical_record_number": [
+          "LH-84920"
+        ],
+        "hospital_name": [
+          "Lilavati Hospital & Research Centre"
+        ],
+        "fitness_status": [
+          "Fit for Duty"
+        ],
+        "blood_group": [
+          "O+"
+        ],
+        "physician_name": [
+          "Dr. P. Deshmukh, MD"
         ]
       },
       "credentials": [
@@ -204,6 +219,21 @@
         ],
         "picture": [
           "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face&q=80"
+        ],
+        "medical_record_number": [
+          "LH-77215"
+        ],
+        "hospital_name": [
+          "Lilavati Hospital & Research Centre"
+        ],
+        "fitness_status": [
+          "Fit for Duty"
+        ],
+        "blood_group": [
+          "B+"
+        ],
+        "physician_name": [
+          "Dr. P. Deshmukh, MD"
         ]
       },
       "credentials": [
@@ -236,6 +266,21 @@
         ],
         "picture": [
           "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop&crop=face&q=80"
+        ],
+        "medical_record_number": [
+          "LH-63491"
+        ],
+        "hospital_name": [
+          "Lilavati Hospital & Research Centre"
+        ],
+        "fitness_status": [
+          "Fit for Duty"
+        ],
+        "blood_group": [
+          "A+"
+        ],
+        "physician_name": [
+          "Dr. P. Deshmukh, MD"
         ]
       },
       "credentials": [

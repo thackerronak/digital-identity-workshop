@@ -47,6 +47,10 @@ const TRUSTED_ISSUERS = (process.env.TRUSTED_ISSUERS || 'http://keycloak.localho
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
+const TRUSTED_VCTS = (process.env.TRUSTED_VCTS || 'https://workshop.acme.test/employee-badge,https://lilavati.example/medical-certificate')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
 const REQUIRE_KEY_BINDING = process.env.REQUIRE_KEY_BINDING !== 'false';
 
 // In-memory session tracking
@@ -147,9 +151,8 @@ async function verifySdJwtPresentation(rawVp, session) {
   const issuerPayload = verified.payload;
 
   // 3. Verify Verifiable Credential Type (vct)
-  const EXPECTED_VCT = 'https://workshop.acme.test/employee-badge';
-  if (issuerPayload.vct && issuerPayload.vct !== EXPECTED_VCT) {
-    throw new Error(`Unexpected verifiable credential type (vct): "${issuerPayload.vct}", expected "${EXPECTED_VCT}"`);
+  if (issuerPayload.vct && !TRUSTED_VCTS.includes(issuerPayload.vct)) {
+    throw new Error(`Unexpected verifiable credential type (vct): "${issuerPayload.vct}", expected one of [${TRUSTED_VCTS.join(', ')}]`);
   }
 
   // 4. Verify Disclosures against _sd digests
@@ -181,8 +184,17 @@ async function verifySdJwtPresentation(rawVp, session) {
   }
 
   // 5. Enforce required claims & filter to requested selective disclosures
-  // Selective disclosure: validate only name and company ID (employee_id)
-  const allowedClaims = new Set(['employee_id', 'given_name', 'family_name']);
+  const allowedClaims = new Set([
+    'employee_id',
+    'patient_id',
+    'given_name',
+    'family_name',
+    'hospital_name',
+    'medical_record_number',
+    'fitness_status',
+    'blood_group',
+    'physician_name'
+  ]);
   const validatedClaims = {};
   for (const [k, v] of Object.entries(disclosedClaims)) {
     if (allowedClaims.has(k)) {
@@ -190,11 +202,32 @@ async function verifySdJwtPresentation(rawVp, session) {
     }
   }
 
-  if (!validatedClaims.employee_id) {
-    throw new Error('Missing required claim: employee_id');
-  }
-  if (!validatedClaims.given_name && !validatedClaims.family_name) {
-    throw new Error('Missing required claim: name (given_name / family_name)');
+  // Type-specific or use-case-specific claim requirement enforcement:
+  const isMedicalCert = issuerPayload.vct === 'https://lilavati.example/medical-certificate';
+  const isEmployeeBadge = issuerPayload.vct === 'https://workshop.acme.test/employee-badge';
+
+  if (isMedicalCert) {
+    if (!validatedClaims.fitness_status) {
+      throw new Error('Missing required claim: fitness_status');
+    }
+  } else if (isEmployeeBadge || session.useCase === 'cart_discount') {
+    const idClaim = validatedClaims.employee_id || validatedClaims.patient_id;
+    if (!idClaim) {
+      throw new Error('Missing required claim: employee_id');
+    }
+    // Standardize ID claim so downstream consumers always find employee_id
+    if (!validatedClaims.employee_id && validatedClaims.patient_id) {
+      validatedClaims.employee_id = validatedClaims.patient_id;
+    }
+    if (!validatedClaims.given_name && !validatedClaims.family_name) {
+      throw new Error('Missing required claim: name (given_name / family_name)');
+    }
+  } else {
+    // Generic fallback for any other credential
+    const idClaim = validatedClaims.employee_id || validatedClaims.patient_id;
+    if (!idClaim && !validatedClaims.fitness_status) {
+      throw new Error('Missing required claim: employee_id or fitness_status');
+    }
   }
 
   // 6. Key-Binding JWT Verification
@@ -269,25 +302,64 @@ app.post('/api/oid4vp/session', async (req, res) => {
     const nonce = crypto.randomBytes(16).toString('hex');
     const state = crypto.randomBytes(16).toString('hex');
 
-    // Select query: Selective disclosure requests only name and company ID (employee_id)
-    const requestedClaims = [
-      { path: ['given_name'] },
-      { path: ['family_name'] },
-      { path: ['employee_id'] }
-    ];
+    // Select query depending on use case
+    let dcqlQuery;
+    let clientName = 'Google Store & Corporate Portal';
 
-    const dcqlQuery = {
-      credentials: [
-        {
-          id: 'employee_badge',
-          format: 'dc+sd-jwt',
-          meta: {
-            vct_values: ['https://workshop.acme.test/employee-badge']
+    if (useCase === 'term_plan') {
+      clientName = 'Corporate Term Life Insurance Underwriting Portal';
+      dcqlQuery = {
+        credentials: [
+          {
+            id: 'employee_badge',
+            format: 'dc+sd-jwt',
+            meta: {
+              vct_values: ['https://workshop.acme.test/employee-badge']
+            },
+            claims: [
+              { path: ['given_name'] },
+              { path: ['family_name'] },
+              { path: ['employee_id'] }
+            ]
           },
-          claims: requestedClaims
-        }
-      ]
-    };
+          {
+            id: 'medical_certificate',
+            format: 'dc+sd-jwt',
+            meta: {
+              vct_values: ['https://lilavati.example/medical-certificate']
+            },
+            claims: [
+              { path: ['fitness_status'] },
+              { path: ['blood_group'] },
+              { path: ['hospital_name'] },
+              { path: ['medical_record_number'] },
+              { path: ['physician_name'] },
+              { path: ['patient_id'] }
+            ]
+          }
+        ]
+      };
+    } else {
+      // Default: cart_discount
+      const requestedClaims = [
+        { path: ['given_name'] },
+        { path: ['family_name'] },
+        { path: ['employee_id'] }
+      ];
+
+      dcqlQuery = {
+        credentials: [
+          {
+            id: 'employee_badge',
+            format: 'dc+sd-jwt',
+            meta: {
+              vct_values: TRUSTED_VCTS
+            },
+            claims: requestedClaims
+          }
+        ]
+      };
+    }
 
     const requestPayload = {
       client_id: 'x509_san_dns:verifier.localhost',
@@ -296,7 +368,7 @@ app.post('/api/oid4vp/session', async (req, res) => {
       nonce,
       state,
       client_metadata: {
-        client_name: 'Google Store & Corporate Portal',
+        client_name: clientName,
         vp_formats_supported: {
           'dc+sd-jwt': {
             sd_jwt_alg_values: ['ES256'],
@@ -385,23 +457,38 @@ app.post('/api/oid4vp/response', async (req, res) => {
       });
     }
 
-    // Extract SD-JWT VC from vp_token
-    let rawVp = vp_token;
+    // Extract SD-JWT VC presentations from vp_token
+    let presentationsToVerify = [];
     if (typeof vp_token === 'string' && (vp_token.startsWith('{') || vp_token.startsWith('['))) {
       try {
         const parsed = JSON.parse(vp_token);
         if (parsed.employee_badge && Array.isArray(parsed.employee_badge)) {
-          rawVp = parsed.employee_badge[0];
-        } else if (Array.isArray(parsed)) {
-          rawVp = parsed[0];
+          presentationsToVerify.push(...parsed.employee_badge);
+        }
+        if (parsed.medical_certificate && Array.isArray(parsed.medical_certificate)) {
+          presentationsToVerify.push(...parsed.medical_certificate);
+        }
+        if (presentationsToVerify.length === 0 && Array.isArray(parsed)) {
+          presentationsToVerify = parsed;
         }
       } catch (e) {}
     }
+    if (presentationsToVerify.length === 0) {
+      presentationsToVerify = [vp_token];
+    }
 
-    // Spec-compliant cryptographic verification
-    let verificationResult;
+    // Spec-compliant cryptographic verification across all presented credentials
+    const combinedDisclosedClaims = {};
+    const presentedVcts = [];
+    let allKeyBindingVerified = true;
+
     try {
-      verificationResult = await verifySdJwtPresentation(rawVp, session);
+      for (const token of presentationsToVerify) {
+        const result = await verifySdJwtPresentation(token, session);
+        Object.assign(combinedDisclosedClaims, result.disclosedClaims);
+        if (result.issuerPayload.vct) presentedVcts.push(result.issuerPayload.vct);
+        if (!result.keyBindingVerified) allKeyBindingVerified = false;
+      }
     } catch (verifyErr) {
       console.error(`[Verifier] Cryptographic verification FAILED for session ${sessionId}:`, verifyErr.message);
       session.status = 'failed';
@@ -409,7 +496,7 @@ app.post('/api/oid4vp/response', async (req, res) => {
       session.failedAt = Date.now();
 
       const origin = session.returnOrigin || PUBLIC_URL;
-      const tab = session.useCase === 'cart_discount' ? 'cart' : (session.useCase || 'cart');
+      const tab = session.useCase === 'term_plan' ? 'term_plan' : 'cart';
       const failRedirectUri = `${origin}/?session_id=${sessionId}&verified=false&error=${encodeURIComponent(verifyErr.message)}&tab=${tab}`;
 
       return res.status(400).json({
@@ -419,22 +506,60 @@ app.post('/api/oid4vp/response', async (req, res) => {
       });
     }
 
-    const { issuerPayload, disclosedClaims, keyBindingVerified } = verificationResult;
     console.log('[Verifier] Cryptographic verification SUCCESSFUL for session:', sessionId);
-    console.log('[Verifier] Disclosed claims:', disclosedClaims);
-    console.log('[Verifier] Holder Key Binding verified:', keyBindingVerified);
+    console.log('[Verifier] Disclosed claims:', combinedDisclosedClaims);
+    console.log('[Verifier] Holder Key Binding verified:', allKeyBindingVerified);
+
+    // Dynamic health-based Term Plan quote calculation
+    let termPlanQuote = null;
+    const isFit = (combinedDisclosedClaims.fitness_status || '').toLowerCase().includes('fit');
+    if (session.useCase === 'term_plan' || combinedDisclosedClaims.fitness_status) {
+      if (isFit) {
+        termPlanQuote = {
+          eligibility: 'Pre-Approved (Preferred Platinum Tier)',
+          coverageAmount: '$2,000,000',
+          basePremium: 65.00,
+          discountAmount: 40.00,
+          finalMonthlyPremium: 25.00,
+          corporateSubsidyPct: '60%',
+          healthRating: 'Super Preferred (Fit for Duty)',
+          medicalExamWaiver: 'Approved (Certified by Lilavati Hospital)',
+          hospitalName: combinedDisclosedClaims.hospital_name || 'Lilavati Hospital & Research Centre',
+          physicianName: combinedDisclosedClaims.physician_name || 'Dr. P. Deshmukh, MD',
+          bloodGroup: combinedDisclosedClaims.blood_group || 'Verified',
+          medicalRecordNumber: combinedDisclosedClaims.medical_record_number || 'LH-VERIFIED',
+          termLength: '20-Year Guaranteed Level Term'
+        };
+      } else {
+        termPlanQuote = {
+          eligibility: 'Standard Approval',
+          coverageAmount: '$1,000,000',
+          basePremium: 75.00,
+          discountAmount: 25.00,
+          finalMonthlyPremium: 50.00,
+          corporateSubsidyPct: '33%',
+          healthRating: 'Standard Health Tier',
+          medicalExamWaiver: 'Conditional',
+          hospitalName: combinedDisclosedClaims.hospital_name || 'Lilavati Hospital',
+          physicianName: combinedDisclosedClaims.physician_name || 'Attending Physician',
+          bloodGroup: combinedDisclosedClaims.blood_group || 'Verified',
+          medicalRecordNumber: combinedDisclosedClaims.medical_record_number || 'Verified',
+          termLength: '10-Year Level Term'
+        };
+      }
+    }
 
     session.status = 'verified';
     session.claims = {
-      ...disclosedClaims,
-      iss: issuerPayload.iss,
-      vct: issuerPayload.vct
+      ...combinedDisclosedClaims,
+      vcts: presentedVcts,
+      termPlanQuote
     };
-    session.keyBindingVerified = keyBindingVerified;
+    session.keyBindingVerified = allKeyBindingVerified;
     session.verifiedAt = Date.now();
 
     const origin = session.returnOrigin || PUBLIC_URL;
-    const tab = session.useCase === 'cart_discount' ? 'cart' : (session.useCase || 'cart');
+    const tab = session.useCase === 'term_plan' ? 'term_plan' : 'cart';
     const redirectUri = `${origin}/?session_id=${sessionId}&verified=true&tab=${tab}`;
 
     // Standard OID4VP direct_post response: return redirect_uri for wwWallet to navigate back

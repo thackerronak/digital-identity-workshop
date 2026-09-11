@@ -19,8 +19,11 @@ WHERE NOT EXISTS (
 -- "Add credentials" screen, so the employee can reach it from the wallet.
 INSERT INTO credential_portal (url, display, visible)
 SELECT 'http://keycloak.localhost:8080/',
-       JSON_ARRAY(JSON_OBJECT('name', 'Google Employee Badge', 'locale', 'en')),
+       JSON_ARRAY(
+         JSON_OBJECT('name', 'Get Employee and Medical Identity', 'locale', 'en')
+       ),
        1
 WHERE NOT EXISTS (
   SELECT 1 FROM credential_portal WHERE url = 'http://keycloak.localhost:8080/'
 );
+

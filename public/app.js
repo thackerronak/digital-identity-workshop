@@ -39,6 +39,12 @@ let isEmployeeVerified = false;
 let verifiedClaims = null;
 let verificationError = null;
 
+// ──────────────── TERM PLAN STATE ────────────────
+let isTermPlanVerified = false;
+let termPlanClaims = null;
+let termPlanQuote = null;
+let termPlanError = null;
+
 // ──────────────── INITIALIZATION ────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   sessionStorage.removeItem('acme_verified_claims');
@@ -46,6 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTabs();
   await checkUrlParamsForVerification();
   renderCart();
+  renderTermPlan();
   setupEventListeners();
 });
 
@@ -101,23 +108,47 @@ async function checkUrlParamsForVerification() {
 
   if (sessionId) {
     if (verified === 'false' || errorMsg) {
-      isEmployeeVerified = false;
-      verifiedClaims = null;
-      verificationError = errorMsg || 'Presentation cryptographically rejected';
+      if (activeTab === 'term_plan') {
+        isTermPlanVerified = false;
+        termPlanClaims = null;
+        termPlanQuote = null;
+        termPlanError = errorMsg || 'Presentation cryptographically rejected';
+      } else {
+        isEmployeeVerified = false;
+        verifiedClaims = null;
+        verificationError = errorMsg || 'Presentation cryptographically rejected';
+      }
     } else if (verified === 'true') {
       try {
         const res = await fetch(`/api/oid4vp/status/${sessionId}`);
         if (res.ok) {
           const data = await res.json();
           if (data.status === 'verified') {
-            isEmployeeVerified = true;
-            verifiedClaims = data.claims;
-            verificationError = null;
-            activeTab = 'cart';
+            if (activeTab === 'term_plan' || data.useCase === 'term_plan') {
+              isTermPlanVerified = true;
+              termPlanClaims = data.claims;
+              termPlanQuote = data.claims?.termPlanQuote || null;
+              termPlanError = null;
+              activeTab = 'term_plan';
+            } else {
+              isEmployeeVerified = true;
+              verifiedClaims = data.claims;
+              verificationError = null;
+              activeTab = 'cart';
+            }
           } else if (data.status === 'failed') {
-            isEmployeeVerified = false;
-            verifiedClaims = null;
-            verificationError = data.error || 'Verification failed';
+            if (activeTab === 'term_plan' || data.useCase === 'term_plan') {
+              isTermPlanVerified = false;
+              termPlanClaims = null;
+              termPlanQuote = null;
+              termPlanError = data.error || 'Verification failed';
+              activeTab = 'term_plan';
+            } else {
+              isEmployeeVerified = false;
+              verifiedClaims = null;
+              verificationError = data.error || 'Verification failed';
+              activeTab = 'cart';
+            }
           }
         }
       } catch (err) {
@@ -131,6 +162,7 @@ async function checkUrlParamsForVerification() {
 
   switchTab(activeTab);
   renderCart();
+  renderTermPlan();
 }
 
 // ──────────────── RENDER CART & TOTALS ────────────────
@@ -266,6 +298,129 @@ function removeItem(index) {
   renderCart();
 }
 
+// ──────────────── RENDER TERM PLAN BUY ────────────────
+function renderTermPlan() {
+  const quoteCard = document.getElementById('term-quote-card');
+  const unverifiedState = document.getElementById('term-unverified-state');
+  const verifiedState = document.getElementById('term-verified-state');
+  const errorBox = document.getElementById('term-error-notice');
+
+  if (!quoteCard || !unverifiedState || !verifiedState) return;
+
+  if (isTermPlanVerified && termPlanClaims && termPlanQuote) {
+    quoteCard.classList.add('verified');
+    unverifiedState.classList.add('hidden');
+    verifiedState.classList.remove('hidden');
+
+    const fullName = [termPlanClaims.given_name, termPlanClaims.family_name].filter(Boolean).join(' ') || termPlanClaims.email || 'Verified Policyholder';
+    const dept = termPlanClaims.department || 'Staff';
+    const empId = termPlanClaims.employee_id || 'N/A';
+    const fitness = termPlanClaims.fitness_status || 'Fit for Duty';
+    const hospital = termPlanQuote.hospitalName || 'Lilavati Hospital & Research Centre';
+    const physician = termPlanQuote.physicianName || 'Dr. P. Deshmukh, MD';
+    const bloodGroup = termPlanClaims.blood_group || 'O+';
+    const isFit = fitness.toLowerCase().includes('fit');
+
+    verifiedState.innerHTML = `
+      <div class="term-verified-banner">
+        <div class="term-check-circle">✓</div>
+        <div class="term-verified-banner-text">
+          <div class="term-banner-title">Dual Credentials Cryptographically Verified</div>
+          <div class="term-banner-sub">Employee Badge + Medical Certificate</div>
+        </div>
+      </div>
+
+      <!-- Verified Policyholder Profile -->
+      <div class="term-holder-card">
+        <div class="holder-avatar">👤</div>
+        <div class="holder-meta">
+          <div class="holder-name">${escapeHtml(fullName)}</div>
+          <div class="holder-sub">${escapeHtml(dept)} • Employee ID: <strong>${escapeHtml(empId)}</strong></div>
+        </div>
+      </div>
+
+      <!-- Health Underwriting Badge -->
+      <div class="term-health-verified-box">
+        <div class="health-box-header">
+          <span class="health-icon">🏥</span>
+          <strong>Lilavati Certified Clinical Status</strong>
+        </div>
+        <div class="health-meta-grid">
+          <div><span class="meta-label">Status:</span> <span class="meta-val ${isFit ? 'status-fit' : 'status-cond'}">${escapeHtml(fitness)}</span></div>
+          <div><span class="meta-label">Blood Group:</span> <span class="meta-val">${escapeHtml(bloodGroup)}</span></div>
+          <div><span class="meta-label">Physician:</span> <span class="meta-val">${escapeHtml(physician)}</span></div>
+          <div><span class="meta-label">Hospital:</span> <span class="meta-val">${escapeHtml(hospital)}</span></div>
+        </div>
+      </div>
+
+      <!-- Underwritten Quote Card -->
+      <div class="term-quote-pricing-box">
+        <div class="tier-chip-wrap">
+          <span class="tier-chip ${isFit ? 'tier-chip-plat' : 'tier-chip-std'}">${escapeHtml(termPlanQuote.eligibility)}</span>
+        </div>
+        <div class="coverage-display">
+          <div class="coverage-label">Calculated Guaranteed Coverage</div>
+          <div class="coverage-amount">${escapeHtml(termPlanQuote.coverageAmount)}</div>
+          <div class="coverage-tenure">${escapeHtml(termPlanQuote.termLength)}</div>
+        </div>
+
+        <div class="premium-pricing-breakdown">
+          <div class="price-row">
+            <span>Standard Market Rate</span>
+            <span class="struck-price">$${termPlanQuote.basePremium.toFixed(2)}/mo</span>
+          </div>
+          <div class="price-row subsidy-row">
+            <span>Corporate Group Subsidy (${termPlanQuote.corporateSubsidyPct})</span>
+            <span class="subsidy-amount">-$${termPlanQuote.discountAmount.toFixed(2)}/mo</span>
+          </div>
+          <div class="price-divider"></div>
+          <div class="price-row final-price-row">
+            <span>Your Monthly Cost</span>
+            <span class="final-premium">$${termPlanQuote.finalMonthlyPremium.toFixed(2)}<span>/mo</span></span>
+          </div>
+        </div>
+
+        <div class="waiver-note">
+          ✨ <strong>Medical Exam Waiver:</strong> ${escapeHtml(termPlanQuote.medicalExamWaiver)}
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button class="btn-buy-term" id="btn-buy-term-policy" onclick="handleBuyTermPolicy()">
+        <span>Buy Term Plan ($${termPlanQuote.finalMonthlyPremium.toFixed(2)}/mo)</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
+      <div class="term-post-note">Instant binding • Payroll deductible • 30-day money-back guarantee</div>
+    `;
+  } else {
+    quoteCard.classList.remove('verified');
+    unverifiedState.classList.remove('hidden');
+    verifiedState.classList.add('hidden');
+    verifiedState.innerHTML = '';
+  }
+
+  // Error Notice
+  if (errorBox) {
+    if (termPlanError && !isTermPlanVerified) {
+      errorBox.classList.remove('hidden');
+      errorBox.innerHTML = `
+        <div class="verification-error-card">
+          <div class="error-badge-icon">⚠️</div>
+          <div class="error-badge-info">
+            <div class="error-badge-title">Presentation Cryptographically Rejected</div>
+            <div class="error-badge-desc">${escapeHtml(termPlanError)}</div>
+          </div>
+        </div>
+      `;
+    } else {
+      errorBox.classList.add('hidden');
+      errorBox.innerHTML = '';
+    }
+  }
+}
+
 // ──────────────── OID4VP VERIFICATION FLOW ────────────────
 let qrPollingInterval = null;
 let qrCodeInstance = null;
@@ -273,12 +428,22 @@ let qrCodeInstance = null;
 function setupEventListeners() {
   const btnApply = document.getElementById('btn-apply-discount');
   if (btnApply) {
-    btnApply.addEventListener('click', startEmployeeVerification);
+    btnApply.addEventListener('click', () => startVerificationFlow('cart_discount', 'btn-apply-discount'));
   }
 
   const btnShowQr = document.getElementById('btn-show-qr');
   if (btnShowQr) {
-    btnShowQr.addEventListener('click', openQrModal);
+    btnShowQr.addEventListener('click', () => openQrModal('cart_discount'));
+  }
+
+  const btnTermApply = document.getElementById('btn-term-apply-wallet');
+  if (btnTermApply) {
+    btnTermApply.addEventListener('click', () => startVerificationFlow('term_plan', 'btn-term-apply-wallet'));
+  }
+
+  const btnTermQr = document.getElementById('btn-term-show-qr');
+  if (btnTermQr) {
+    btnTermQr.addEventListener('click', () => openQrModal('term_plan'));
   }
 
   const btnCheckout = document.getElementById('btn-checkout');
@@ -287,11 +452,13 @@ function setupEventListeners() {
   }
 }
 
-async function startEmployeeVerification() {
-  const btn = document.getElementById('btn-apply-discount');
-  const originalText = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = `<span>Connecting to Wallet...</span>`;
+async function startVerificationFlow(useCase = 'cart_discount', btnId = 'btn-apply-discount') {
+  const btn = document.getElementById(btnId);
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span>Connecting to Wallet...</span>`;
+  }
 
   try {
     saveCartState();
@@ -300,7 +467,7 @@ async function startEmployeeVerification() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        useCase: 'cart_discount',
+        useCase,
         returnOrigin: window.location.origin
       })
     });
@@ -310,20 +477,21 @@ async function startEmployeeVerification() {
     }
 
     const session = await response.json();
-    console.log('[Store] Created OID4VP session:', session);
+    console.log(`[Verifier] Created OID4VP session for ${useCase}:`, session);
 
     // Direct redirection to wallet running at http://localhost:3001
-    // Wallet handles selection and returns to our redirect_uri
     window.location.href = session.walletAuthUrl;
   } catch (err) {
-    console.error('[Store] Verification error:', err);
+    console.error('[Verifier] Verification error:', err);
     alert('Failed to connect to wallet. Ensure Docker containers are running.');
-    btn.disabled = false;
-    btn.innerHTML = originalText;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
   }
 }
 
-async function openQrModal() {
+async function openQrModal(useCase = 'cart_discount') {
   const modal = document.getElementById('qr-modal');
   const qrContainer = document.getElementById('qrcode-container');
   const statusText = document.getElementById('qr-status-text');
@@ -331,7 +499,6 @@ async function openQrModal() {
 
   if (!modal || !qrContainer) return;
 
-  // Clear any previous interval or QR
   if (qrPollingInterval) {
     clearInterval(qrPollingInterval);
     qrPollingInterval = null;
@@ -349,7 +516,7 @@ async function openQrModal() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        useCase: 'cart_discount',
+        useCase,
         returnOrigin: window.location.origin
       })
     });
@@ -359,9 +526,8 @@ async function openQrModal() {
     }
 
     const session = await response.json();
-    console.log('[Store] QR session created:', session);
+    console.log(`[Verifier] QR session created (${useCase}):`, session);
 
-    // Wallet scanner splits on '?' and forwards client_id and request_uri to /cb
     const qrUri = `openid4vp://?client_id=x509_san_dns:verifier.localhost&request_uri=${encodeURIComponent(session.requestUri)}`;
 
     if (spinner) spinner.classList.add('hidden');
@@ -376,11 +542,15 @@ async function openQrModal() {
       correctLevel: QRCode.CorrectLevel.M
     });
 
-    if (statusText) statusText.innerText = 'Waiting for wallet presentation...';
+    if (statusText) {
+      statusText.innerText = useCase === 'term_plan'
+        ? 'Waiting for Employee + Medical credentials...'
+        : 'Waiting for Google Employee Badge...';
+    }
 
-    startQrPolling(session.sessionId);
+    startQrPolling(session.sessionId, useCase);
   } catch (err) {
-    console.error('[Store] Error creating QR session:', err);
+    console.error('[Verifier] Error creating QR session:', err);
     if (spinner) spinner.classList.add('hidden');
     if (statusText) statusText.innerText = 'Failed to generate QR code.';
   }
@@ -395,7 +565,7 @@ function closeQrModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-function startQrPolling(sessionId) {
+function startQrPolling(sessionId, useCase = 'cart_discount') {
   if (qrPollingInterval) clearInterval(qrPollingInterval);
 
   qrPollingInterval = setInterval(async () => {
@@ -409,15 +579,25 @@ function startQrPolling(sessionId) {
         qrPollingInterval = null;
 
         const statusText = document.getElementById('qr-status-text');
-        if (statusText) statusText.innerText = '✅ Badge verified successfully!';
+        if (statusText) statusText.innerText = '✅ Presentation verified successfully!';
 
-        isEmployeeVerified = true;
-        verifiedClaims = data.claims;
-        verificationError = null;
+        if (useCase === 'term_plan') {
+          isTermPlanVerified = true;
+          termPlanClaims = data.claims;
+          termPlanQuote = data.claims?.termPlanQuote || null;
+          termPlanError = null;
+          switchTab('term_plan');
+        } else {
+          isEmployeeVerified = true;
+          verifiedClaims = data.claims;
+          verificationError = null;
+          switchTab('cart');
+        }
 
         setTimeout(() => {
           closeQrModal();
-          renderCart();
+          if (useCase === 'term_plan') renderTermPlan();
+          else renderCart();
         }, 800);
       } else if (data.status === 'failed') {
         clearInterval(qrPollingInterval);
@@ -428,38 +608,56 @@ function startQrPolling(sessionId) {
           statusText.innerHTML = `❌ <strong>Verification Failed:</strong> ${escapeHtml(data.error || 'Cryptographic rejection')}`;
         }
 
-        isEmployeeVerified = false;
-        verifiedClaims = null;
-        verificationError = data.error || 'Cryptographic verification failed';
+        if (useCase === 'term_plan') {
+          isTermPlanVerified = false;
+          termPlanClaims = null;
+          termPlanQuote = null;
+          termPlanError = data.error || 'Cryptographic verification failed';
+        } else {
+          isEmployeeVerified = false;
+          verifiedClaims = null;
+          verificationError = data.error || 'Cryptographic verification failed';
+        }
 
         setTimeout(() => {
           closeQrModal();
-          renderCart();
+          if (useCase === 'term_plan') renderTermPlan();
+          else renderCart();
         }, 2000);
       }
     } catch (e) {
-      console.warn('[Store] Polling error:', e);
+      console.warn('[Verifier] Polling error:', e);
     }
   }, 1200);
 }
 
-// ──────────────── FUTURE USE CASES ────────────────
-async function simulateUseCase(useCaseName) {
-  try {
-    const response = await fetch('/api/oid4vp/session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        useCase: useCaseName,
-        returnOrigin: window.location.origin
-      })
-    });
+// ──────────────── BUY TERM PLAN MODAL ────────────────
+function handleBuyTermPolicy() {
+  const modal = document.getElementById('term-buy-modal');
+  const summaryEl = document.getElementById('term-policy-summary');
+  if (!modal || !summaryEl || !termPlanQuote) return;
 
-    const session = await response.json();
-    window.location.href = session.walletAuthUrl;
-  } catch (err) {
-    alert(`Could not initiate ${useCaseName} verification flow.`);
-  }
+  const fullName = [termPlanClaims?.given_name, termPlanClaims?.family_name].filter(Boolean).join(' ') || 'Employee';
+  const policyNum = 'POL-GP-' + Math.floor(100000 + Math.random() * 900000);
+
+  summaryEl.innerHTML = `
+    <div><strong>Policy Number:</strong> <code>${policyNum}</code></div>
+    <div><strong>Policyholder:</strong> ${escapeHtml(fullName)}</div>
+    <div><strong>Employee ID:</strong> ${escapeHtml(termPlanClaims?.employee_id || 'N/A')}</div>
+    <div><strong>Assured Sum (Coverage):</strong> <span style="color:#1a73e8; font-weight:700;">${escapeHtml(termPlanQuote.coverageAmount)}</span></div>
+    <div><strong>Plan Tenure:</strong> ${escapeHtml(termPlanQuote.termLength)}</div>
+    <div><strong>Underwritten Tier:</strong> ${escapeHtml(termPlanQuote.eligibility)}</div>
+    <div><strong>Certified Health Status:</strong> <span style="color:#1e8e3e; font-weight:600;">${escapeHtml(termPlanClaims?.fitness_status || 'Fit')}</span> (${escapeHtml(termPlanQuote.hospitalName)})</div>
+    <div><strong>Monthly Premium:</strong> <strong>$${termPlanQuote.finalMonthlyPremium.toFixed(2)}/mo</strong> (Includes ${termPlanQuote.corporateSubsidyPct} Corporate Subsidy)</div>
+    <div style="margin-top:10px; font-size:12px; color:#5f6368;">Digital Policy Certificate securely registered to your corporate HR and benefits profile.</div>
+  `;
+
+  modal.classList.remove('hidden');
+}
+
+function closeTermBuyModal() {
+  const modal = document.getElementById('term-buy-modal');
+  if (modal) modal.classList.add('hidden');
 }
 
 // ──────────────── CHECKOUT MODAL ────────────────

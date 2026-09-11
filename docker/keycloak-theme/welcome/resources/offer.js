@@ -1,19 +1,34 @@
-/* Issuer page: PKCE login against Keycloak, then mint a credential offer.
+/* Issuer page: PKCE login against Keycloak, then mint credential offers.
  *
- * Entirely client-side and served by Keycloak itself (custom welcome theme),
- * so it runs on the issuer's own origin -- no backend, no service account, no
- * CORS. The employee's own access token is what authorises the offer.
+ * Supports both Google Employee Badge and Lilavati Hospital Medical Certificate
+ * on the same page.
  */
 'use strict';
 
-// Where the holder lives. Accepts an offer via its query string
-// (it acts on `credential_offer` / `credential_offer_uri`),
-// so we can hand the credential over with a single link.
 const WALLET_URL = 'http://localhost:3001/';
 
 const REALM = 'workshop';
 const CLIENT_ID = 'workshop-badge';
-const CREDENTIAL = 'employee-badge';
+const SCOPES = 'openid profile employee-badge medical-certificate';
+
+const CREDENTIALS = {
+  'employee-badge': {
+    id: 'employee-badge',
+    title: 'Google Employee Badge',
+    desc: 'Verified corporate identity credential for building access and discounts.',
+    format: 'dc+sd-jwt'
+  },
+  'medical-certificate': {
+    id: 'medical-certificate',
+    title: 'Lilavati Hospital Medical Certificate',
+    desc: 'Official medical fitness & health record certificate issued by Lilavati Hospital & Research Centre.',
+    format: 'dc+sd-jwt'
+  }
+};
+
+let currentAccessToken = null;
+let currentClaims = null;
+let currentCredential = 'employee-badge';
 
 const ORIGIN = window.location.origin;
 const REALM_BASE = `${ORIGIN}/realms/${REALM}`;
@@ -50,26 +65,11 @@ async function startLogin() {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     response_type: 'code',
-    // The credential scope must be requested here, or the resulting token
-    // cannot authorise an offer for it.
-    scope: `openid profile ${CREDENTIAL}`,
+    scope: SCOPES,
     redirect_uri: REDIRECT_URI,
     code_challenge: await challengeFor(verifier),
     code_challenge_method: 'S256',
-    // Fragment, not query. Keycloak's welcome page (which serves this very
-    // page at /) answers any request carrying a query string with a 303 that
-    // appends a trailing slash to it:
-    //     GET /?code=abc&session_state=x
-    //     303 Location: /?code=abc&session_state=x/
-    // That rewrite corrupts the OAuth response before this page can read it.
-    // A fragment is never sent to the server, so `GET /` stays clean.
     response_mode: 'fragment',
-    // Always authenticate afresh. Two reasons:
-    //  * The demo is ABOUT the password step, so showing it every time is right.
-    //  * Keycloak here has no persistent session store (no DB volume), so a
-    //    restart orphans the browser's KC cookies and a silent re-use of that
-    //    state fails with `temporarily_unavailable: authentication_expired`
-    //    or `already_logged_in`. Forcing login sidesteps stale state entirely.
     prompt: 'login',
   });
   window.location.assign(`${REALM_BASE}/protocol/openid-connect/auth?${params}`);
@@ -99,10 +99,9 @@ async function exchangeCode(code) {
 
 /* ---------- offer minting ---------- */
 
-async function mintOffer(accessToken) {
+async function mintOffer(accessToken, credentialId = 'employee-badge') {
   const params = new URLSearchParams({
-    credential_configuration_id: CREDENTIAL,
-    // Pre-authorized: the wallet needs no client registration or redirect URI.
+    credential_configuration_id: credentialId,
     pre_authorized: 'true',
     type: 'uri_qr',
   });
@@ -114,13 +113,17 @@ async function mintOffer(accessToken) {
   return body;
 }
 
-async function render(offer, claims) {
+async function render(offer, claims, credentialId = 'employee-badge') {
+  const credInfo = CREDENTIALS[credentialId] || CREDENTIALS['employee-badge'];
+  
+  if ($('cred-banner-title')) $('cred-banner-title').textContent = credInfo.title;
+  if ($('cred-banner-desc')) $('cred-banner-desc').textContent = credInfo.desc;
+  if ($('cred-format-tag')) $('cred-format-tag').textContent = credInfo.format;
+
   // `issuer` is already the credential-offer base path; the nonce identifies
   // this particular offer.
   const offerUrl = `${offer.issuer}/${offer.nonce}`;
 
-  // Two equivalent handover forms. Wallets differ in which they accept:
-  // by reference makes the wallet fetch the document; by value embeds it.
   const byReference =
     `openid-credential-offer://?${new URLSearchParams({ credential_offer_uri: offerUrl })}`;
 
@@ -139,6 +142,26 @@ async function render(offer, claims) {
   show('step-offer');
 }
 
+async function selectCredential(credentialId) {
+  if (!currentAccessToken) return;
+  currentCredential = credentialId;
+
+  const tabEmp = $('tab-employee-badge');
+  const tabMed = $('tab-medical-certificate');
+  if (tabEmp) tabEmp.classList.toggle('active', credentialId === 'employee-badge');
+  if (tabMed) tabMed.classList.toggle('active', credentialId === 'medical-certificate');
+
+  try {
+    $('open-wallet').textContent = 'Generating offer...';
+    const offer = await mintOffer(currentAccessToken, credentialId);
+    $('open-wallet').textContent = 'Open in my wallet →';
+    await render(offer, currentClaims, credentialId);
+  } catch (err) {
+    $('open-wallet').textContent = 'Open in my wallet →';
+    fail(`Failed to generate offer for ${credentialId}: ${err.message}`);
+  }
+}
+
 function decodeJwtPayload(jwt) {
   try {
     const part = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
@@ -151,7 +174,26 @@ function decodeJwtPayload(jwt) {
 async function main() {
   $('login').addEventListener('click', () => startLogin().catch(fail));
   $('retry').addEventListener('click', () => window.location.assign(REDIRECT_URI));
-  $('again').addEventListener('click', () => window.location.assign(REDIRECT_URI));
+  $('again').addEventListener('click', () => selectCredential(currentCredential).catch(fail));
+
+  const tabEmp = $('tab-employee-badge');
+  if (tabEmp) {
+    tabEmp.addEventListener('click', () => {
+      if (currentCredential !== 'employee-badge') {
+        selectCredential('employee-badge').catch(fail);
+      }
+    });
+  }
+
+  const tabMed = $('tab-medical-certificate');
+  if (tabMed) {
+    tabMed.addEventListener('click', () => {
+      if (currentCredential !== 'medical-certificate') {
+        selectCredential('medical-certificate').catch(fail);
+      }
+    });
+  }
+
   $('copy').addEventListener('click', async () => {
     $('uri').select();
     try {
@@ -163,15 +205,12 @@ async function main() {
     }
   });
 
-  // The authorization response arrives in the fragment (see response_mode above).
   const frag = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   const code = frag.get('code');
   const error = frag.get('error');
 
   if (error) {
     const detail = frag.get('error_description') || '';
-    // Stale Keycloak login state (typically after the container restarted).
-    // Recoverable: clear it with an RP-initiated logout, then start over.
     if (/authentication_expired|already_logged_in|session/i.test(`${error} ${detail}`)) {
       const logout = `${REALM_BASE}/protocol/openid-connect/logout?` + new URLSearchParams({
         client_id: CLIENT_ID,
@@ -185,20 +224,18 @@ async function main() {
   }
   if (!code) return show('step-login');
 
-  // An authorization code is single-use. Guard against the page running the
-  // exchange twice (bfcache restore, double load), which would burn the code
-  // and surface a confusing invalid_grant.
   const seen = sessionStorage.getItem('used_code');
   if (seen === code) return fail('This sign-in link was already used. Click Start again.');
   sessionStorage.setItem('used_code', code);
 
-  // Clean the code out of the address bar so a refresh does not re-use it.
   window.history.replaceState({}, '', REDIRECT_URI);
   console.log('[issuer] exchanging code', code.slice(0, 12) + '...');
   try {
     const token = await exchangeCode(code);
-    const offer = await mintOffer(token.access_token);
-    await render(offer, decodeJwtPayload(token.access_token));
+    currentAccessToken = token.access_token;
+    currentClaims = decodeJwtPayload(token.access_token);
+    const offer = await mintOffer(currentAccessToken, currentCredential);
+    await render(offer, currentClaims, currentCredential);
   } catch (e) {
     fail(e.message || e);
   }

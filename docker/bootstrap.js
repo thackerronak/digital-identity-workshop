@@ -212,6 +212,25 @@ async function main() {
   await ensureEncryptionKeys(token);
   await ensureCredentialScopes(token);
 
+  // Ensure Declarative User Profile permits custom unmanaged attributes (medical data, employee_id, etc.)
+  const { status: upStatus, data: up } = await call('GET', `/admin/realms/${REALM}/users/profile`, { token });
+  if (upStatus === 200 && typeof up === 'object') {
+    if (up.unmanagedAttributePolicy !== 'ENABLED') {
+      up.unmanagedAttributePolicy = 'ENABLED';
+      const { status: putUpStatus } = await call('PUT', `/admin/realms/${REALM}/users/profile`, {
+        token,
+        body: up
+      });
+      console.log(`   user profile: enabled unmanagedAttributePolicy (${putUpStatus})`);
+    }
+  }
+
+  const userMedicalDefaults = {
+    ronak: { employee_id: 'ACME-0417', department: 'Platform Engineering', age_over_18: 'true', medical_record_number: 'LH-84920', hospital_name: 'Lilavati Hospital & Research Centre', fitness_status: 'Fit for Duty', blood_group: 'O+', physician_name: 'Dr. P. Deshmukh, MD' },
+    raj: { employee_id: 'ACME-1182', department: 'Security', age_over_18: 'true', medical_record_number: 'LH-77215', hospital_name: 'Lilavati Hospital & Research Centre', fitness_status: 'Fit for Duty', blood_group: 'B+', physician_name: 'Dr. P. Deshmukh, MD' },
+    milan: { employee_id: 'ACME-2043', department: 'Finance', age_over_18: 'true', medical_record_number: 'LH-63491', hospital_name: 'Lilavati Hospital & Research Centre', fitness_status: 'Fit for Duty', blood_group: 'A+', physician_name: 'Dr. P. Deshmukh, MD' }
+  };
+
   for (const username of USERS) {
     const { status: uStatus, data: found } = await call(
       'GET',
@@ -224,6 +243,31 @@ async function main() {
       continue;
     }
     const uid = found[0].id;
+    const { status: fullStatus, data: userObj } = await call(
+      'GET',
+      `/admin/realms/${REALM}/users/${uid}`,
+      { token }
+    );
+
+    // Ensure medical certificate attributes are set on the user
+    if (userMedicalDefaults[username] && fullStatus === 200) {
+      const currentAttrs = userObj.attributes || {};
+      const newAttrs = { ...currentAttrs };
+      let updated = false;
+      for (const [k, v] of Object.entries(userMedicalDefaults[username])) {
+        if (!currentAttrs[k] || currentAttrs[k][0] !== v) {
+          newAttrs[k] = [v];
+          updated = true;
+        }
+      }
+      if (updated) {
+        await call('PUT', `/admin/realms/${REALM}/users/${uid}`, {
+          token,
+          body: { ...userObj, attributes: newAttrs }
+        });
+        console.log(`   ${username}: updated medical attributes in Keycloak`);
+      }
+    }
 
     const { status: credStatus, data: existing } = await call(
       'GET',
@@ -237,24 +281,13 @@ async function main() {
     }
 
     const names = Array.isArray(existing) ? new Set(existing.map((c) => c.credentialScopeName)) : new Set();
-    if (names.has(SCOPE)) {
-      console.log(`   ${username}: '${SCOPE}' already assigned`);
-      continue;
-    }
-
-    const { status: assignStatus, data: resp } = await call(
-      'POST',
-      `/admin/realms/${REALM}/users/${uid}/vc/credentials`,
-      {
-        token,
-        body: { credentialScopeName: SCOPE },
+    for (const sc of ['employee-badge', 'medical-certificate']) {
+      if (!names.has(sc)) {
+        await call('POST', `/admin/realms/${REALM}/users/${uid}/vc/credentials`, {
+          token,
+          body: { credentialScopeName: sc }
+        });
       }
-    );
-
-    if (assignStatus === 200 || assignStatus === 201) {
-      console.log(`   ${username}: assigned '${SCOPE}'`);
-    } else {
-      console.log(`   ${username}: FAILED (${assignStatus})`, resp);
     }
   }
 
