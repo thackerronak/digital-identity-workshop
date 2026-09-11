@@ -486,6 +486,18 @@ body {
   color: var(--gray-600);
 }
 
+.badge-sd-pill {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1a73e8;
+  background: #e8f0fe;
+  border: 1px solid #c2e7ff;
+  border-radius: 9999px;
+  padding: 2px 8px;
+}
+
 .discount-active-notice {
   font-size: 12px;
   font-weight: 600;

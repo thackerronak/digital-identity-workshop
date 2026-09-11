@@ -123,6 +123,33 @@ async function createVerifierSession(useCase = 'cart_discount') {
 }
 
 /**
+ * Extracts selective disclosures for specified claim names from a full SD-JWT.
+ */
+function extractSelectiveSdJwt(rawSdJwt, allowedClaimNames) {
+  const parts = rawSdJwt.split('~');
+  const issuerJwt = parts[0];
+  const selectedDisclosures = [];
+
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i];
+    if (!part) continue;
+    try {
+      const decoded = JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
+      if (Array.isArray(decoded) && decoded.length >= 3) {
+        const claimName = decoded[1];
+        if (allowedClaimNames.includes(claimName)) {
+          selectedDisclosures.push(part);
+        }
+      }
+    } catch (e) {
+      // ignore non-disclosure parts
+    }
+  }
+
+  return `${issuerJwt}~${selectedDisclosures.join('~')}~`;
+}
+
+/**
  * Builds a key-bound presentation, allowing one field of the KB-JWT to be
  * subverted at a time. Used by the KB-JWT field checks (tests 7-9): each
  * varies exactly one input so a failure names the check that regressed.
@@ -181,29 +208,25 @@ async function runTests() {
   const { rawSdJwt, holderKey } = await getRealKeycloakCredential('ronak', 'workshop');
   console.log('  -> Received genuine SD-JWT VC credential with cnf.jwk');
 
-  // Test 1: Valid presentation with Holder Key Binding
-  console.log('\n[Test 1] Valid Keycloak SD-JWT VC with Key-Binding JWT...');
+  // Test 1: Valid Selective Presentation (only name and company ID) with Holder Key Binding
+  console.log('\n[Test 1] Valid Selective Disclosure (only name & company ID) with Key-Binding JWT...');
   const s1 = await createVerifierSession('cart_discount');
-  const sdJwtWithoutKb = rawSdJwt.endsWith('~') ? rawSdJwt : rawSdJwt + '~';
-  const sdHash1 = crypto.createHash('sha256').update(sdJwtWithoutKb).digest('base64url');
-
-  const kbJwt1 = await new jose.SignJWT({
+  const selectiveSdJwt1 = extractSelectiveSdJwt(rawSdJwt, ['given_name', 'family_name', 'employee_id']);
+  const validPresentation = await buildKeyBoundPresentation(selectiveSdJwt1, holderKey, {
     nonce: s1.nonce,
-    aud: s1.client_id,
-    iat: Math.floor(Date.now() / 1000),
-    sd_hash: sdHash1
-  })
-    .setProtectedHeader({ alg: 'ES256', typ: 'kb+jwt' })
-    .sign(holderKey);
+    aud: s1.client_id
+  });
 
-  const validPresentation = `${sdJwtWithoutKb}${kbJwt1}`;
   const r1 = await postPresentation(s1.state, { employee_badge: [validPresentation] });
   assert(r1.status === 200, 'Direct Post returns 200 OK');
   assert(r1.data.redirect_uri && r1.data.redirect_uri.includes('verified=true'), 'Redirect URI signals verified=true');
 
   const stat1 = await fetch(`${VERIFIER_URL}/api/oid4vp/status/${s1.sessionId}`).then(r => r.json());
   assert(stat1.status === 'verified', 'Session status is "verified"');
-  assert(stat1.claims && stat1.claims.employee_id === 'ACME-0417', 'Claims correctly verified (employee_id: ACME-0417)');
+  assert(stat1.claims && stat1.claims.employee_id === 'ACME-0417', 'Company ID correctly verified (employee_id: ACME-0417)');
+  assert(stat1.claims && stat1.claims.given_name === 'Ronak', 'Name correctly verified (given_name: Ronak)');
+  assert(stat1.claims && stat1.claims.department === undefined, 'Selective disclosure: department is NOT disclosed');
+  assert(stat1.claims && stat1.claims.email === undefined, 'Selective disclosure: email is NOT disclosed');
   assert(stat1.keyBindingVerified === true, 'Holder Key Binding cryptographically verified');
 
   // Test 2: Replay Attack Protection
@@ -263,7 +286,7 @@ async function runTests() {
   // Test 6: Bearer Replay Attack: Key-bound credential without KB-JWT
   console.log('\n[Test 6] Bearer Replay Attack: Key-bound SD-JWT presented without KB-JWT...');
   const s6 = await createVerifierSession('cart_discount');
-  const bearerPresentation = sdJwtWithoutKb; // No KB-JWT attached
+  const bearerPresentation = selectiveSdJwt1; // No KB-JWT attached
 
   const r6 = await postPresentation(s6.state, { employee_badge: [bearerPresentation] });
   assert(r6.status === 400, 'Direct Post rejects unbound presentation with HTTP 400');
@@ -302,6 +325,30 @@ async function runTests() {
   const r9 = await postPresentation(s9.state, { employee_badge: [wrongHash] });
   assert(r9.status === 400, 'Direct Post rejects KB-JWT with mismatched sd_hash (HTTP 400)');
   assert(r9.data.error_description && r9.data.error_description.includes('sd_hash mismatch'), 'Error description reports sd_hash mismatch');
+
+  // Test 10: Missing Company ID (employee_id) rejection
+  console.log('\n[Test 10] Missing Company ID: Presenting only name without employee_id...');
+  const s10 = await createVerifierSession('cart_discount');
+  const noEmpIdSdJwt = extractSelectiveSdJwt(rawSdJwt, ['given_name', 'family_name']);
+  const noEmpIdPresentation = await buildKeyBoundPresentation(noEmpIdSdJwt, holderKey, {
+    nonce: s10.nonce,
+    aud: s10.client_id
+  });
+  const r10 = await postPresentation(s10.state, { employee_badge: [noEmpIdPresentation] });
+  assert(r10.status === 400, 'Direct Post rejects presentation missing employee_id (HTTP 400)');
+  assert(r10.data.error_description && r10.data.error_description.includes('Missing required claim: employee_id'), 'Rejection explicitly states missing employee_id');
+
+  // Test 11: Missing Name (given_name / family_name) rejection
+  console.log('\n[Test 11] Missing Name: Presenting only employee_id without name claims...');
+  const s11 = await createVerifierSession('cart_discount');
+  const noNameSdJwt = extractSelectiveSdJwt(rawSdJwt, ['employee_id']);
+  const noNamePresentation = await buildKeyBoundPresentation(noNameSdJwt, holderKey, {
+    nonce: s11.nonce,
+    aud: s11.client_id
+  });
+  const r11 = await postPresentation(s11.state, { employee_badge: [noNamePresentation] });
+  assert(r11.status === 400, 'Direct Post rejects presentation missing name (HTTP 400)');
+  assert(r11.data.error_description && r11.data.error_description.includes('Missing required claim: name'), 'Rejection explicitly states missing name');
 
   console.log('\n===========================================================');
   console.log(`  RESULTS: ${passed} passed, ${failed} failed`);

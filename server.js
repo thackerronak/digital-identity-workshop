@@ -180,7 +180,24 @@ async function verifySdJwtPresentation(rawVp, session) {
     }
   }
 
-  // 5. Key-Binding JWT Verification
+  // 5. Enforce required claims & filter to requested selective disclosures
+  // Selective disclosure: validate only name and company ID (employee_id)
+  const allowedClaims = new Set(['employee_id', 'given_name', 'family_name']);
+  const validatedClaims = {};
+  for (const [k, v] of Object.entries(disclosedClaims)) {
+    if (allowedClaims.has(k)) {
+      validatedClaims[k] = v;
+    }
+  }
+
+  if (!validatedClaims.employee_id) {
+    throw new Error('Missing required claim: employee_id');
+  }
+  if (!validatedClaims.given_name && !validatedClaims.family_name) {
+    throw new Error('Missing required claim: name (given_name / family_name)');
+  }
+
+  // 6. Key-Binding JWT Verification
   let keyBindingVerified = false;
   if (kbJwt) {
     if (!issuerPayload.cnf || !issuerPayload.cnf.jwk) {
@@ -235,7 +252,7 @@ async function verifySdJwtPresentation(rawVp, session) {
 
   return {
     issuerPayload,
-    disclosedClaims,
+    disclosedClaims: validatedClaims,
     keyBindingVerified
   };
 }
@@ -252,29 +269,12 @@ app.post('/api/oid4vp/session', async (req, res) => {
     const nonce = crypto.randomBytes(16).toString('hex');
     const state = crypto.randomBytes(16).toString('hex');
 
-    // Select query depending on use case
-    let requestedClaims = [
-      { path: ['employee_id'] },
-      { path: ['department'] },
+    // Select query: Selective disclosure requests only name and company ID (employee_id)
+    const requestedClaims = [
       { path: ['given_name'] },
       { path: ['family_name'] },
-      { path: ['email'] }
+      { path: ['employee_id'] }
     ];
-
-    if (useCase === 'building_access') {
-      requestedClaims = [
-        { path: ['employee_id'] },
-        { path: ['given_name'] },
-        { path: ['family_name'] },
-        { path: ['department'] }
-      ];
-    } else if (useCase === 'it_access') {
-      requestedClaims = [
-        { path: ['email'] },
-        { path: ['employee_id'] },
-        { path: ['department'] }
-      ];
-    }
 
     const dcqlQuery = {
       credentials: [
@@ -326,7 +326,8 @@ app.post('/api/oid4vp/session', async (req, res) => {
       createdAt: Date.now(),
       claims: null,
       error: null,
-      keyBindingVerified: false
+      keyBindingVerified: false,
+      requestedClaims: ['given_name', 'family_name', 'employee_id']
     };
 
     sessions.set(sessionId, sessionData);

@@ -213,6 +213,7 @@ function renderCart() {
         <div class="badge-info">
           <div class="badge-holder-name" id="badge-holder-name">${escapeHtml(fullName)}</div>
           ${metaItems.length > 0 ? `<div class="badge-holder-meta">${metaItems.join(' • ')}</div>` : ''}
+          <div class="badge-sd-pill">🔒 Selective Disclosure: Name & Company ID Only</div>
         </div>
       </div>
       <div class="discount-active-notice">
