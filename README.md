@@ -50,10 +50,10 @@ flowchart TD
 
     subgraph Verifier["Verifier: Portal & Store (http://localhost:4000)"]
         STORE_CART["E-Commerce Cart (20% Discount)"]
-        SCENARIOS["Turnstiles • IT • Benefits"]
+        TERM_PLAN["Term Plan Buy (Dual Credential Underwriting)"]
         OID4VP_SRV["OID4VP Server (server.js)<br/>• Signed Request Objects (JAR / x5c)<br/>• DCQL Query Engine<br/>• Direct Post Receiver"]
         STORE_CART --> OID4VP_SRV
-        SCENARIOS --> OID4VP_SRV
+        TERM_PLAN --> OID4VP_SRV
     end
 
     BOOT -. "Auto-provisions" .-> KC_CORE
@@ -65,10 +65,10 @@ flowchart TD
 ### Components:
 | Service | URL | Role | Description |
 | :--- | :--- | :--- | :--- |
-| **Issuer** | `http://localhost:8080/` | Keycloak 26.6 | Issues SD-JWT Google Employee Badges over standard OID4VCI protocol. |
+| **Issuer** | `http://localhost:8080/` | Keycloak 26.6 | Issues SD-JWT Employee Badges and Lilavati Hospital Medical Certificates over OID4VCI. |
 | **Holder** | `http://localhost:3001/` | Digital Wallet | Open-source holder web app storing credentials and executing presentations. |
-| **Verifier** | `http://localhost:4000/` | E-Commerce Portal | Verifies presented credentials via OID4VP and applies discounts. |
-| **Bootstrap** | *Background container* | Automation Runner | Provisions Keycloak client scopes, keys, and user credential entitlements. |
+| **Verifier** | `http://localhost:4000/` | Verification Portal | Verifies credentials via OID4VP for Store Cart discounts and Term Plan insurance underwriting. |
+| **Bootstrap** | *Background container* | Automation Runner | Provisions Keycloak client scopes, user profile policies, and user credential entitlements. |
 
 ---
 
@@ -144,11 +144,15 @@ Pre-configured corporate employee accounts in the `workshop` realm:
 
 ---
 
-### Step 4: Explore Enterprise Scenarios
-Switch tabs in the top navigation bar of `http://localhost:4000/` to test additional badge use cases:
-- **Building Access**: Physical security turnstile requesting minimal claims (`employee_id`, `department`).
-- **IT & Cloud Portal**: Access to internal infrastructure and developer consoles.
-- **Benefits & Perks**: Corporate fitness and commuter subsidy redemption.
+### Step 4: Corporate Term Life Insurance Underwriting (Dual-Credential Presentation)
+1. Switch to the **Term Plan Buy** tab in the top navigation bar of **[http://localhost:4000/](http://localhost:4000/)**.
+2. Notice the instant underwriting portal requiring two credentials via DCQL:
+   - **Employee Badge** (`https://workshop.acme.test/employee-badge`)
+   - **Medical Certificate** (`https://lilavati.example/medical-certificate`)
+3. Click **Present with Web Wallet** (or scan the QR code with your mobile wallet).
+4. Disclose your identity and Lilavati Hospital clinical fitness status.
+5. The verifier cryptographically validates both credentials, assesses the clinical health rating, calculates coverage ($2,000,000 Platinum Preferred for *Fit for Duty* with 60% corporate subsidy at $25/mo), and certifies the medical exam waiver.
+6. Click **Buy Term Plan** to instantly bind the corporate term life policy.
 
 ---
 

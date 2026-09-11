@@ -84,24 +84,32 @@ flowchart TD
   - `ronak` (Ronak Patel, Platform Engineering) &mdash; Password: `workshop`
   - `raj` (Raj Sharma, Security) &mdash; Password: `workshop`
   - `milan` (Milan Mehta, Finance) &mdash; Password: `workshop`
-  - Pre-configured claims: `employee_id`, `department`, `age_over_18`, `picture`, `given_name`, `family_name`, `email`
+  - Pre-configured claims: `employee_id`, `department`, `age_over_18`, `picture`, `given_name`, `family_name`, `email`, `medical_record_number`, `hospital_name`, `fitness_status`, `blood_group`, `physician_name`
 
 ---
 
 ## Verifiable Credentials & Scopes
 
-- **Primary Credential**: `employee-badge`
+- **1. Google Employee Badge**: `employee-badge`
   - Format: `dc+sd-jwt` (SD-JWT VC)
   - VCT: `https://workshop.acme.test/employee-badge`
   - Alg: `ES256` (signed with demo EC key via Keycloak)
   - Display Name: `Google Employee Badge`
+  - Claims: `given_name`, `family_name`, `email`, `employee_id`, `department`, `age_over_18`, `picture`
+  - Display Artwork:
+    - Google Brand Logo: `https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg`
+    - Card Background: `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=829&h=504&fit=crop&q=80`
+- **2. Lilavati Hospital Medical Certificate**: `medical-certificate`
+  - Format: `dc+sd-jwt` (SD-JWT VC)
+  - VCT: `https://lilavati.example/medical-certificate`
+  - Alg: `ES256` (signed with demo EC key via Keycloak)
+  - Display Name: `Lilavati Hospital Medical Certificate`
+  - Claims: `fitness_status`, `blood_group`, `hospital_name`, `medical_record_number`, `physician_name`, `patient_id`
+  - Display Artwork:
+    - Hospital Logo: `https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=128&h=128&fit=crop&q=80`
+    - Card Background: `https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=829&h=504&fit=crop&q=80`
 - **Fallback Credential**: `employee-badge-jwt`
   - Format: `jwt_vc_json` (W3C VC-JWT)
-- **Claims**:
-  - `given_name`, `family_name`, `email`, `employee_id`, `department`, `age_over_18`, `picture`
-- **Display Artwork**:
-  - Google Brand Logo: `https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg`
-  - Card Background: `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=829&h=504&fit=crop&q=80`
 
 ---
 
